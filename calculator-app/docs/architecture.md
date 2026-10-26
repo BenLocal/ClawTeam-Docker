@@ -709,7 +709,7 @@ createStore({historyStore}) -> {
       <div class="error" role="alert"></div>
     </div>
     <div class="keypad" role="group" aria-label="计算器键盘">
-      <!-- 20 个 button，带 data-action / data-value -->
+      <!-- 22 个 button，带 data-action / data-value -->
     </div>
   </section>
   <aside aria-label="计算历史">
