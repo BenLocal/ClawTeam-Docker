@@ -40,6 +40,8 @@ jobs:
         env:
           CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}
         run: python3 tests/smoke.py
+      - name: Verify dashboard task wakeups
+        run: docker run --rm -i "${TEST_IMAGE}" python3 - < tests/test_leader_watcher.py
 
   publish:
     name: Publish multi-platform image

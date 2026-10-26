@@ -10,7 +10,7 @@ ClawTeam、tmux、Git、Python、Node.js、Claude Code、Magpie 和 Nginx 打包
 
 首次启动在 Claude Code 界面完成登录和项目授权；也可以启动前设置 `ANTHROPIC_API_KEY`。脚本自动传入已设置的 `ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`ANTHROPIC_BASE_URL`。额外配置可通过 `CLAWTEAM_ENV_FILE=/path/to/agent.env` 传入，文件采用 Docker env-file 格式。凭据不会写入镜像。
 
-Leader 启动时会收到使用 ClawTeam 建队、拆分和协调 Worker 的系统提示；实际 Worker 在 Leader 分配任务时才创建。镜像已为 Claude 安装官方 ClawTeam skill。
+容器启动时自动注册 `clawteam-docker` 团队和 Leader，并启动任务监听器，每 5 秒检查一次变化。在 `/clawteam/` 中选择该团队，通过 New Task 新增任务后，监听器会通知 Leader 读取任务、分配 Worker 并更新状态。首次使用仍需完成 Claude 的登录和项目授权；需要人工确认时，通过 `./clawteam.sh attach` 操作。镜像已为 Claude 安装官方 ClawTeam skill。已有团队会复用，实际 Worker 在 Leader 分配任务时才创建。
 
 按 **Ctrl-b 再按 d** 脱离 tmux，任务继续运行。
 

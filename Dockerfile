@@ -16,6 +16,7 @@ ENV PATH="/opt/venv/bin:${PATH}" HOME=/home/node TERM=xterm-256color \
 COPY --from=magpie /magpie /usr/local/bin/magpie
 COPY nginx.conf /etc/nginx/clawteam.conf
 COPY subpath.js /etc/nginx/subpath.js
+COPY leader_runtime.py /usr/local/lib/clawteam-docker/leader_runtime.py
 COPY --chmod=755 container-entrypoint.sh /usr/local/bin/container-entrypoint
 USER node
 WORKDIR /workspace

@@ -1,5 +1,6 @@
 *
 !Dockerfile
 !container-entrypoint.sh
+!leader_runtime.py
 !nginx.conf
 !subpath.js

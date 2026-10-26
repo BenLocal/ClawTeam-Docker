@@ -60,11 +60,22 @@ for ((i=0; i<50; i++)); do
     sleep 0.2
 done
 if [[ $ready != true ]]; then echo 'Web 面板启动失败。' >&2; exit 1; fi
-prompt="你是本容器中的 Leader。请使用 clawteam skill 完成用户任务。通过 clawteam team spawn-team 创建团队，使用 clawteam spawn tmux claude 创建 Worker；Leader 和所有 Worker 都必须在本容器运行。按需拆分任务、分配、检查收件箱并汇总结果。用户任务：${1:-请先询问用户要完成什么任务。}"
+export CLAWTEAM_TEAM_NAME="${CLAWTEAM_TEAM_NAME:-clawteam-docker}"
+runtime=/usr/local/lib/clawteam-docker/leader_runtime.py
+identity=$(python3 "$runtime" prepare "$CLAWTEAM_TEAM_NAME")
+read -r CLAWTEAM_AGENT_NAME CLAWTEAM_AGENT_ID <<< "$identity"
+export CLAWTEAM_AGENT_NAME CLAWTEAM_AGENT_ID
+export CLAWTEAM_AGENT_TYPE=leader CLAWTEAM_AGENT_LEADER=1 CLAWTEAM_WORKSPACE_DIR=/workspace
+prompt="你是团队 $CLAWTEAM_TEAM_NAME 的 Leader，名字是 $CLAWTEAM_AGENT_NAME。团队已注册，直接使用它。请使用 clawteam skill 完成用户任务。使用 clawteam spawn tmux claude 创建 Worker；Leader 和所有 Worker 都必须在本容器运行。收到任务监听通知时，检查任务列表，主动接手未分配的 pending 任务，按需拆分、分配并汇总结果到任务描述。用户任务：${1:-等待面板中的任务。}"
 leader_args=(claude --append-system-prompt "$prompt")
 if [[ -n ${1:-} ]]; then leader_args+=("$1"); fi
 printf -v leader_command '%q ' "${leader_args[@]}"
-tmux new-session -d -s clawteam -n leader -c /workspace "$leader_command"
+team_session="clawteam-$CLAWTEAM_TEAM_NAME"
+tmux new-session -d -s "$team_session" -n "$CLAWTEAM_AGENT_NAME" -c /workspace "$leader_command"
+# The canonical session is required by ClawTeam's runtime-message injector.
+tmux new-session -d -s clawteam -t "$team_session"
+python3 "$runtime" watch "$CLAWTEAM_TEAM_NAME" "$CLAWTEAM_AGENT_NAME" &
+pids+=($!)
 # Detaching tmux keeps agents alive; a failed Web service stops the container.
 set +e
 wait -n "${pids[@]}"
