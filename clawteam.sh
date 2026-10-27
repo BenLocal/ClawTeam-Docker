@@ -31,7 +31,7 @@ action=${1:-help}
 shift || true
 case "$action" in
     build)
-        docker build --build-arg "CLAWTEAM_REF=${CLAWTEAM_REF:-main}" \
+        docker build --build-arg "CLAWTEAM_REF=${CLAWTEAM_REF:-self}" \
             --build-arg "CLAUDE_VERSION=${CLAUDE_VERSION:-latest}" \
             --build-arg "MAGPIE_VERSION=${MAGPIE_VERSION:-latest}" -t "$IMAGE" "$ROOT"
         ;;

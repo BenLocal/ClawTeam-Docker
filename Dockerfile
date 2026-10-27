@@ -3,7 +3,7 @@ ARG DOCKER_VERSION=29.9.2
 FROM ghcr.io/yetone/magpie:${MAGPIE_VERSION} AS magpie
 FROM docker:${DOCKER_VERSION}-dind AS docker
 FROM node:22-bookworm-slim
-ARG CLAWTEAM_REF=main
+ARG CLAWTEAM_REF=self
 ARG CLAUDE_VERSION=latest
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates curl git tmux python3 python3-venv ripgrep nginx \

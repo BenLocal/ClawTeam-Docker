@@ -298,7 +298,7 @@ CLAWTEAM_MODEL=group/coding ./clawteam.sh start /项目目录 "继续任务"
 
 项目挂载到 `/workspace`，修改会直接写回宿主机；Linux 上项目需允许容器用户 UID 1000 读写。`<容器名>-home` Docker 卷保存 Claude 登录状态、ClawTeam 消息及配置；停止后重启可保留这些文件，但不会恢复已结束的 Agent 进程或 tmux 会话。Git worktree 元数据使用容器路径，运行期间请在容器里管理 Worker worktree。不要传入宿主机 linked worktree，其 `.git` 路径在容器内可能无效。
 
-默认镜像名为 `clawteam-local:latest`，容器名为 `clawteam`，可用 `CLAWTEAM_IMAGE`、`CLAWTEAM_CONTAINER` 覆盖。镜像默认跟随上游版本；可指定版本重建：
+默认镜像名为 `clawteam-local:latest`，容器名为 `clawteam`，可用 `CLAWTEAM_IMAGE`、`CLAWTEAM_CONTAINER` 覆盖。ClawTeam 源码默认使用 [BenLocal/ClawTeam 的 self 分支](https://github.com/BenLocal/ClawTeam/tree/self)；可通过 `CLAWTEAM_REF` 指定该 fork 中的其他分支、tag 或 commit 重建：
 
 ```bash
 CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> \
