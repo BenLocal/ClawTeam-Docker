@@ -16,6 +16,31 @@ spec.loader.exec_module(bootstrap)
 
 
 class ProxyBootstrapTests(unittest.TestCase):
+    def test_docker_normalization_does_not_change_application_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(
+                os.environ,
+                {
+                    "DOCKER_CONFIG": directory,
+                    "MIRROR_HTTP_PROXY": "http://mirror:3128",
+                    "HTTP_PROXY": "http://application:8080",
+                    "NO_PROXY": "registry.internal",
+                },
+                clear=True,
+            ):
+                original = dict(os.environ)
+                bootstrap.configure()
+                self.assertEqual(dict(os.environ), original)
+                child = bootstrap.download_environment()
+                self.assertEqual(child["HTTPS_PROXY"], "http://mirror:3128")
+                self.assertEqual(dict(os.environ), original)
+            proxies = json.loads(Path(directory, "config.json").read_text())["proxies"][
+                "default"
+            ]
+            self.assertEqual(proxies["httpProxy"], "http://mirror:3128")
+            self.assertIn("registry.internal", proxies["noProxy"])
+            self.assertIn("127.0.0.1", proxies["noProxy"])
+
     def test_proxy_configuration_preserves_registry_auth_and_other_daemons(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"
@@ -55,7 +80,10 @@ class ProxyBootstrapTests(unittest.TestCase):
             path.write_text('{"proxies":{"default":{"httpProxy":"http://old:3128"}}}')
             with patch.dict(os.environ, {"DOCKER_CONFIG": directory}, clear=True):
                 bootstrap.configure()
-            self.assertEqual(json.loads(path.read_text())["proxies"]["default"], {})
+            self.assertEqual(
+                json.loads(path.read_text())["proxies"]["default"],
+                {"noProxy": "localhost,127.0.0.1,::1"},
+            )
 
     def test_invalid_existing_config_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:

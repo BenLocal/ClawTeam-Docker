@@ -9,11 +9,13 @@ from pathlib import Path
 sys.path.insert(0, "/usr/local/lib/clawteam-docker")
 from plugin_bootstrap import configure, read_plugins
 
-assert os.environ["HTTP_PROXY"] == os.environ["MIRROR_HTTP_PROXY"]
-assert os.environ["HTTPS_PROXY"] == os.environ["MIRROR_HTTP_PROXY"]
-assert os.environ["http_proxy"] == os.environ["MIRROR_HTTP_PROXY"]
-assert "repo.internal" in os.environ["NO_PROXY"]
-assert "127.0.0.1" in os.environ["NO_PROXY"]
+assert os.environ["HTTP_PROXY"] == "http://old-proxy:3128"
+assert "HTTPS_PROXY" not in os.environ
+assert "http_proxy" not in os.environ
+assert os.environ["NO_PROXY"] == "repo.internal"
+docker_proxy=json.loads(Path.home().joinpath(".docker/config.json").read_text())["proxies"]["default"]
+assert docker_proxy["httpProxy"] == os.environ["MIRROR_HTTP_PROXY"]
+assert "127.0.0.1" in docker_proxy["noProxy"]
 with tempfile.TemporaryDirectory() as directory:
     source = Path(directory, "fixture-plugin.js")
     source.write_text("export default async () => ({});\n")
@@ -36,6 +38,7 @@ with tempfile.TemporaryDirectory() as directory:
     profile.write_text(json.dumps(saved))
     # Retry with working networking after the deliberately failed proxy.
     proxy = os.environ.get("PLUGIN_TEST_PROXY", "")
+    os.environ["MIRROR_HTTP_PROXY"] = proxy
     for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
         os.environ.pop(key, None)
     if proxy:
@@ -56,7 +59,7 @@ with tempfile.TemporaryDirectory() as directory:
         raise AssertionError("non-string plugin spec accepted")
 print("PASS: native plugin registration is idempotent and preserves manual plugins/options/off state")
 print("PASS: failed installation is retried rather than marked successful")
-print("PASS: MIRROR_HTTP_PROXY takes precedence; NO_PROXY is retained")
+print("PASS: Docker/download proxy scope preserves the application's proxy environment")
 """
 
 subprocess.run(

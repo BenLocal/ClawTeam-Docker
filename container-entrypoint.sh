@@ -47,12 +47,16 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
-magpie web --addr 127.0.0.1:3430 --no-open &
-pids+=($!)
+magpie_pid=
+if [[ ${CLAWTEAM_DIND:-0} != 1 ]]; then
+    magpie web --addr 127.0.0.1:3430 --no-open &
+    magpie_pid=$!
+    pids+=("$magpie_pid")
+fi
 ready=false
 for ((i=0; i<150; i++)); do
     if magpie healthcheck >/dev/null 2>&1; then ready=true; break; fi
-    kill -0 "${pids[0]}" 2>/dev/null || break
+    if [[ -n $magpie_pid ]] && ! kill -0 "$magpie_pid" 2>/dev/null; then break; fi
     sleep 0.2
 done
 if [[ $ready != true ]]; then echo 'Magpie 启动失败。' >&2; exit 1; fi
@@ -70,7 +74,7 @@ nginx -c /etc/nginx/clawteam.conf -g 'daemon off;' &
 pids+=($!)
 ready=false
 for ((i=0; i<50; i++)); do
-    if curl -fsS --max-time 1 http://127.0.0.1:8080/clawteam/ >/dev/null 2>&1; then
+    if curl --noproxy '*' -fsS --max-time 1 http://127.0.0.1:8080/clawteam/ >/dev/null 2>&1; then
         ready=true; break
     fi
     sleep 0.2

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import yaml
 
+from proxy_bootstrap import download_environment
+
 
 def read_plugins(path):
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -53,6 +55,7 @@ def configure(path):
             text=True,
             timeout=360,
             check=False,
+            env=download_environment(),
         )
         if result.returncode:
             raise RuntimeError(

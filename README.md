@@ -90,7 +90,7 @@ volumes:
 
 同一个 `agent.env` 也可添加部署者自己的环境变量，按 Docker env-file 的 `KEY=value` 格式填写，不需要修改镜像。Compose 使用 `env_file: ./agent.env`，启动脚本使用 `CLAWTEAM_ENV_FILE=/path/to/agent.env`。变量会进入容器环境、Leader、Worker 和 `docker exec` 打开的 shell；DinD 模式的 `clawteam.service` 同样会接收自定义变量，`HOME`、`USER`、`LOGNAME` 保留 node 用户设置。具体变量和值由部署者决定。除代理外，内层 Docker 容器和构建所需的自定义变量仍使用 `docker run --env` 或构建参数显式传入。
 
-代理会应用到 Agent 和 Docker daemon；启动时还会合并 `~/.docker/config.json` 的 `proxies.default`，让内层 `docker build` 和 `docker run` 自动获得代理，同时保留已有的 registry 登录配置。`NO_PROXY` 会自动补上 `localhost`、`127.0.0.1` 和 `::1`，保证 Magpie 的本地请求直连。清空代理变量并重建容器后，会移除之前写入的默认代理。
+Docker 代理归一化仅写入 dockerd 的 systemd 环境和 `~/.docker/config.json` 的 `proxies.default`，让内层 `docker build` 和 `docker run` 获得代理，并保留 registry 登录。Docker 的 `NO_PROXY` 补上本机地址；Agent 和 Magpie 的原始代理变量保持不变。清空代理变量并重建容器后会移除之前写入的默认代理。
 
 Docker 环境变量在创建容器时确定。修改 env-file 后，用 `docker compose up -d --force-recreate` 重建服务；`docker start` 或 `docker restart` 会继续使用原来的环境变量。providers.yaml 的内容则在每次启动时重新读取。
 
@@ -104,6 +104,17 @@ docker exec --user root clawteam systemctl status clawteam
 ```
 
 Docker daemon 异常退出后由 systemd 重启；重启 Docker 服务会暂时中断内层 Docker 操作，ClawTeam 服务保持运行。应用进程退出时，systemd 会正常关闭容器并把应用退出状态返回给 Docker。未启用 DinD 的启动方式仍使用轻量入口，不启动 systemd。
+
+## Magpie 独立服务
+
+启用 systemd 时，`magpie.service` 独立管理 Magpie 网关和 Web，异常退出后自动重启。ClawTeam 在 Magpie 就绪后导入配置并启动 Agent；Magpie 运行时重启不会主动结束 Leader，持久化 Web Key 保持不变。
+
+```bash
+docker exec --user root clawteam systemctl status magpie
+docker exec --user root clawteam systemctl restart magpie
+```
+
+查看 Magpie journal 时先脱敏带 Key 的登录链接。未启用 systemd 时，仍由轻量入口监管 Magpie。
 
 ## Claude Code 自动切换模型
 
@@ -250,7 +261,7 @@ plugins:
 
 启动脚本默认挂载这两个文件，也可通过宿主机环境变量 `CLAWTEAM_MCP_FILE`、`CLAWTEAM_PLUGIN_FILE` 指定文件。Docker/Compose 分别挂载到 `/etc/clawteam/mcp.yaml`、`/etc/clawteam/plugin.yaml`。这些配置在 Magpie 就绪后、Leader 启动前导入，修改后重启容器生效。
 
-下载代理通过容器环境变量 `MIRROR_HTTP_PROXY` 提供，填写容器能访问的代理地址。非空时优先设置 HTTP/HTTPS 代理，并传给 Git、插件安装、Magpie 和内层 Docker；原有 `NO_PROXY` 保留并补上本机地址。Magpie 内部配置 API 直接访问本机。变量未设置时继续使用现有的 `HTTP_PROXY`、`HTTPS_PROXY` 配置。
+`MIRROR_HTTP_PROXY` 优先用于 Docker 的代理配置，以及 MCP/插件安装子进程的下载环境。归一化后的变量不会导出到整个容器，也不会改写 Magpie、ClawTeam 或 Agent 的原始代理变量。安装结束后调用方环境保持不变；原始 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 仍由部署者控制。内部配置 API 及本机就绪检查直接访问本机。
 
 多个模型可通过 YAML 创建路由组：
 

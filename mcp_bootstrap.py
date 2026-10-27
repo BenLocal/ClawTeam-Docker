@@ -10,6 +10,7 @@ from pathlib import Path
 
 import yaml
 
+from proxy_bootstrap import download_environment
 from skills_bootstrap import Library
 
 FIELDS = {
@@ -94,7 +95,11 @@ def read_servers(path):
 def run_command(command, timeout):
     try:
         return subprocess.run(
-            command, capture_output=True, timeout=timeout, check=False
+            command,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+            env=download_environment(),
         ).returncode
     except FileNotFoundError:
         return 127

@@ -1,7 +1,7 @@
 [Unit]
 Description=ClawTeam agents and Web services
-Wants=docker.service
-After=docker.service
+Wants=docker.service magpie.service
+After=docker.service magpie.service
 SuccessAction=exit
 FailureAction=exit
 

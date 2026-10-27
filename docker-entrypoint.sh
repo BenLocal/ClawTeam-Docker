@@ -1,17 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Keep tools, the gateway and dockerd on the same runtime proxy settings.
-if [[ -n ${MIRROR_HTTP_PROXY:-} ]]; then
-    export HTTP_PROXY="$MIRROR_HTTP_PROXY" HTTPS_PROXY="$MIRROR_HTTP_PROXY"
-fi
-export HTTP_PROXY="${HTTP_PROXY:-${http_proxy:-}}" http_proxy="${HTTP_PROXY:-${http_proxy:-}}"
-export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}" https_proxy="${HTTPS_PROXY:-${https_proxy:-}}"
-export ALL_PROXY="${ALL_PROXY:-${all_proxy:-}}" all_proxy="${ALL_PROXY:-${all_proxy:-}}"
-NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
-export NO_PROXY="${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1,::1"
-export no_proxy="$NO_PROXY"
-
 as_agent() {
     if [[ $(id -u) == 0 ]]; then
         setpriv --reuid=node --regid=node --init-groups "$@"

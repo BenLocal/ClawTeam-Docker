@@ -315,6 +315,48 @@ try:
 
         wait_for(lambda: len(leader_starts()) >= 1, "Leader did not launch")
         first_start = leader_starts()[-1]
+        if DIND:
+
+            def magpie_pid():
+                return run(
+                    "docker",
+                    "exec",
+                    "--user",
+                    "root",
+                    NAME,
+                    "systemctl",
+                    "show",
+                    "magpie",
+                    "-p",
+                    "MainPID",
+                    "--value",
+                ).strip()
+
+            previous_magpie = magpie_pid()
+            run(
+                "docker",
+                "exec",
+                "--user",
+                "root",
+                NAME,
+                "systemctl",
+                "kill",
+                "--kill-whom=main",
+                "--signal=KILL",
+                "magpie",
+            )
+            wait_for(
+                lambda: (
+                    magpie_pid() not in ("0", previous_magpie)
+                    and inside("magpie", "healthcheck") is not None
+                ),
+                "Magpie did not recover independently",
+            )
+            assert get("localhost", "/magpie/api/state", cookie=cookie)[0] == 200
+            assert leader_starts()[-1]["pid"] == first_start["pid"]
+            print(
+                "PASS: systemd restarts Magpie independently and preserves its key and Leader"
+            )
         assert first_start["cwd"] == "/workspace", first_start
         assert "--append-system-prompt" in first_start["args"]
         system_prompt = first_start["args"][

@@ -2,7 +2,45 @@
 
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
+
+
+def docker_environment(environment: Mapping[str, str]) -> dict[str, str]:
+    """Normalize Docker proxies without changing the application's environment."""
+    result = {}
+    mirror = environment.get("MIRROR_HTTP_PROXY", "")
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        value = (
+            mirror
+            if mirror and name != "ALL_PROXY"
+            else environment.get(name) or environment.get(name.lower(), "")
+        )
+        if value:
+            result[name] = result[name.lower()] = value
+    bypass = [
+        item
+        for item in (
+            environment.get("NO_PROXY") or environment.get("no_proxy", "")
+        ).split(",")
+        if item
+    ]
+    for host in ("localhost", "127.0.0.1", "::1"):
+        if host not in bypass:
+            bypass.append(host)
+    result["NO_PROXY"] = result["no_proxy"] = ",".join(bypass)
+    return result
+
+
+def download_environment() -> dict[str, str]:
+    """Use the download proxy only for an install command's child process."""
+    environment = dict(os.environ)
+    mirror = environment.get("MIRROR_HTTP_PROXY", "")
+    if mirror:
+        environment.update(
+            HTTP_PROXY=mirror, HTTPS_PROXY=mirror, http_proxy=mirror, https_proxy=mirror
+        )
+    return environment
 
 
 def configure():
@@ -18,13 +56,14 @@ def configure():
     if not isinstance(config.get("proxies", {}).get("default", {}), dict):
         raise TypeError("Docker default proxy must be an object")
     proxies = config.setdefault("proxies", {}).setdefault("default", {})
+    environment = docker_environment(os.environ)
     for variable, key in (
         ("HTTP_PROXY", "httpProxy"),
         ("HTTPS_PROXY", "httpsProxy"),
         ("ALL_PROXY", "allProxy"),
         ("NO_PROXY", "noProxy"),
     ):
-        value = os.environ.get(variable, "")
+        value = environment.get(variable, "")
         if value:
             proxies[key] = value
         else:

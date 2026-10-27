@@ -8,7 +8,7 @@ ARG CLAUDE_VERSION=latest
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates curl git tmux python3 python3-venv ripgrep nginx \
     && rm -rf /var/lib/apt/lists/*
-RUN git clone https://github.com/HKUDS/ClawTeam.git /opt/clawteam \
+RUN git clone https://github.com/BenLocal/ClawTeam.git /opt/clawteam \
     && cd /opt/clawteam && git checkout "$CLAWTEAM_REF" \
     && python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir /opt/clawteam \
@@ -36,7 +36,7 @@ COPY mcp_bootstrap.py plugin_bootstrap.py /usr/local/lib/clawteam-docker/
 COPY proxy_bootstrap.py /usr/local/lib/clawteam-docker/proxy_bootstrap.py
 COPY systemd_runtime.py /usr/local/lib/clawteam-docker/systemd_runtime.py
 COPY systemd/ /etc/systemd/system/
-RUN systemctl enable docker.service clawteam.service clawteam-skills-update.timer \
+RUN systemctl enable docker.service magpie.service clawteam.service clawteam-skills-update.timer \
     && systemctl mask getty.target console-getty.service systemd-udevd.service \
        systemd-udevd-control.socket systemd-udevd-kernel.socket systemd-logind.service \
     && truncate -s 0 /etc/machine-id \
