@@ -18,6 +18,7 @@ Web 端口：CLAWTEAM_WEB_PORT（默认 8080）；CLAWTEAM_WEB_BIND（默认 127
 访问地址：CLAWTEAM_WEB_URL（例如 http://192.168.1.10:8080，无末尾斜线）
 模型路由：CLAWTEAM_MODEL（例如 group/coding；留空沿用 Claude 配置）
 启动配置：CLAWTEAM_PROVIDERS_FILE（宿主机 providers.yaml 路径）
+技能来源：CLAWTEAM_SKILLS_FILE（宿主机 skills.yaml 路径）
 容器内 Docker：CLAWTEAM_DIND=1（需要 privileged，使用独立数据卷）
 代理：通过 CLAWTEAM_ENV_FILE 传入 HTTP_PROXY、HTTPS_PROXY、NO_PROXY
 构建版本：CLAWTEAM_REF、CLAUDE_VERSION、MAGPIE_VERSION
@@ -47,6 +48,9 @@ case "$action" in
         providers_file=$(realpath -- "${CLAWTEAM_PROVIDERS_FILE:-$ROOT/providers.yaml}")
         [[ -f $providers_file ]] || { echo 'providers.yaml 文件不存在。' >&2; exit 1; }
         options+=(--mount "type=bind,source=$providers_file,target=/etc/clawteam/providers.yaml,readonly")
+        skills_file=$(realpath -- "${CLAWTEAM_SKILLS_FILE:-$ROOT/skills.yaml}")
+        [[ -f $skills_file ]] || { echo 'skills.yaml 文件不存在。' >&2; exit 1; }
+        options+=(--mount "type=bind,source=$skills_file,target=/etc/clawteam/skills.yaml,readonly")
         init_options=(--init)
         if [[ ${CLAWTEAM_DIND:-0} == 1 ]]; then
             init_options=(--init=false)

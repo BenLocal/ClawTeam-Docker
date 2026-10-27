@@ -56,6 +56,8 @@ for ((i=0; i<150; i++)); do
     sleep 0.2
 done
 if [[ $ready != true ]]; then echo 'Magpie 启动失败。' >&2; exit 1; fi
+python3 /usr/local/lib/clawteam-docker/skills_bootstrap.py \
+    "${CLAWTEAM_SKILLS_FILE:-/etc/clawteam/skills.yaml}"
 clawteam board serve --host 127.0.0.1 --port 8081 &
 pids+=($!)
 nginx -c /etc/nginx/clawteam.conf -g 'daemon off;' &

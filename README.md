@@ -141,12 +141,31 @@ services:
     volumes:
       - /你的Git项目:/workspace
       - ./providers.yaml:/etc/clawteam/providers.yaml:ro
+      - ./skills.yaml:/etc/clawteam/skills.yaml:ro
       - clawteam-home:/home/node
 volumes:
   clawteam-home:
 ```
 
 如挂载目录包含多个项目，用 Compose 的 `working_dir: /workspace/子项目` 选择 Git 仓库，Leader 和 Worker 会使用这个仓库根目录。
+
+## 启动时导入技能
+
+编辑 `skills.yaml`，填写容器内的本地目录或 Magpie 支持的 Git 仓库地址：
+
+```yaml
+sources:
+  - source: /workspace/aiclass-skills/skills
+    agents: [claude]
+  - source: https://github.com/your-org/other-skills.git
+    agents: [claude]
+```
+
+`./clawteam.sh start` 默认挂载仓库中的 `skills.yaml`，也可用 `CLAWTEAM_SKILLS_FILE=/path/to/skills.yaml` 选择宿主机文件。Compose 按上例挂载。直接运行 Docker 时，可挂载到 `/etc/clawteam/skills.yaml`，或通过容器环境变量 `CLAWTEAM_SKILLS_FILE` 指定其他容器内路径。默认 `sources: []` 不导入技能。
+
+每次启动都会在 Magpie 就绪后扫描来源，通过 Library 安装新技能并同步，然后启动 Leader。已有同名技能会跳过并记录日志，保留其内容、来源和 Agent 分配；删除来源条目不会卸载技能。后续修改已有技能的分配或更新远端内容，请在 Magpie 的 Library 页面操作。本地目录使用链接，文件改动直接可见；远端技能不会在启动时自动覆盖更新。私有仓库使用容器用户自己的 Git 凭据，访问权限需预先配置。
+
+配置、扫描、安装或同步失败时，启动会退出，Leader 不会运行；通过 `docker logs` 查看错误。导入使用持久化的 Magpie Web Key 认证，不需要在 `skills.yaml` 填 Key。自带的 ClawTeam 技能继续由镜像提供。
 
 多个模型可通过 YAML 创建路由组：
 

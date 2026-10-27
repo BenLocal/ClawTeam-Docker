@@ -3,6 +3,8 @@
 !container-entrypoint.sh
 !leader_runtime.py
 !magpie_bootstrap.py
+!skills_bootstrap.py
+!skills.yaml
 !providers.yaml
 !leader-session.sh
 !proxy_bootstrap.py

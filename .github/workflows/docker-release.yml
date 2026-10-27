@@ -44,6 +44,8 @@ jobs:
         run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_magpie_bootstrap.py -v
       - name: Validate Docker proxy configuration
         run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_proxy_bootstrap.py -v
+      - name: Validate skill imports
+        run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_skills_bootstrap.py -v
       - name: Verify Docker in Docker
         env:
           CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}

@@ -21,7 +21,7 @@ FAKE_CLAUDE = """\
 import json, os, sys, time
 from pathlib import Path
 with (Path.home() / "leader-starts.jsonl").open("a") as f:
-    f.write(json.dumps({"pid": os.getpid(), "cwd": os.getcwd(), "args": sys.argv[1:]}) + "\\n")
+    f.write(json.dumps({"pid": os.getpid(), "cwd": os.getcwd(), "args": sys.argv[1:], "skill": (Path.home() / ".claude/skills/startup-smoke/SKILL.md").read_text()}) + "\\n")
 while True:
     time.sleep(1)
 """
@@ -97,6 +97,7 @@ for key in (
     "CLAWTEAM_ENV_FILE",
     "CLAWTEAM_MODEL",
     "CLAWTEAM_PROVIDERS_FILE",
+    "CLAWTEAM_SKILLS_FILE",
 ):
     env.pop(key, None)
 
@@ -161,6 +162,47 @@ try:
         }
         providers.write_text(json.dumps(startup_config))
         env["CLAWTEAM_PROVIDERS_FILE"] = str(providers)
+        skills = Path(directory, "skills")
+        skills.mkdir()
+
+        def add_skill(root, name, content):
+            folder = root / name
+            folder.mkdir(parents=True)
+            (folder / "SKILL.md").write_text(
+                f"---\nname: {name}\ndescription: Smoke fixture\n---\n{content}\n"
+            )
+
+        add_skill(skills, "startup-smoke", "original-skill")
+        git_skills = Path(directory, "git-skills.git")
+        git_skills.mkdir()
+        run("git", "init", str(git_skills))
+
+        def commit_skills():
+            run("git", "-C", str(git_skills), "add", ".")
+            run(
+                "git",
+                "-C",
+                str(git_skills),
+                "-c",
+                "user.name=Smoke",
+                "-c",
+                "user.email=smoke@example.invalid",
+                "commit",
+                "-m",
+                "skills",
+            )
+
+        add_skill(git_skills, "startup-git", "original-git-skill")
+        commit_skills()
+        skills_config = Path(directory, "skills.yaml")
+        skill_sources = {
+            "sources": [
+                {"source": "/workspace/skills", "agents": ["claude"]},
+                {"source": "file:///workspace/git-skills.git", "agents": ["claude"]},
+            ]
+        }
+        skills_config.write_text(json.dumps(skill_sources))
+        env["CLAWTEAM_SKILLS_FILE"] = str(skills_config)
         # GitHub's runner UID can differ from the image's UID 1000. This is a
         # disposable fixture: allow container writes and explicitly trust it.
         Path(directory).chmod(0o777)
@@ -169,7 +211,8 @@ try:
         Path(directory, ".git").chmod(0o777)
         git_env = Path(directory, "test.env")
         git_env.write_text(
-            "GIT_CONFIG_COUNT=1\nGIT_CONFIG_KEY_0=safe.directory\nGIT_CONFIG_VALUE_0=/workspace\n"
+            "GIT_CONFIG_COUNT=2\nGIT_CONFIG_KEY_0=safe.directory\nGIT_CONFIG_VALUE_0=/workspace\n"
+            "GIT_CONFIG_KEY_1=safe.directory\nGIT_CONFIG_VALUE_1=/workspace/git-skills.git\n"
             "PATH=/workspace/bin:/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n"
             "CLAWTEAM_LEADER_RESTART_DELAY=1\nSMOKE_KEY=test\n"
             "SMOKE_FIRST_URL=http://127.0.0.1:9101/v1\nSMOKE_SECOND_URL=http://127.0.0.1:9102/v1\n"
@@ -225,6 +268,24 @@ try:
         first_start = leader_starts()[-1]
         assert first_start["cwd"] == "/workspace", first_start
         assert "--append-system-prompt" in first_start["args"]
+        assert "original-skill" in first_start["skill"], first_start
+        library_before = json.loads(
+            inside("cat", "/home/node/.config/magpie/library.json")
+        )
+        assert sorted(skill["name"] for skill in library_before["skills"]) == [
+            "startup-git",
+            "startup-smoke",
+        ]
+        assert "original-git-skill" in inside(
+            "cat", "/home/node/.claude/skills/startup-git/SKILL.md"
+        )
+        assert (
+            inside("readlink", "/home/node/.claude/skills/clawteam").strip()
+            == "/opt/clawteam/skills/clawteam"
+        )
+        print(
+            "PASS: Library installs skills before Leader and preserves the bundled ClawTeam skill"
+        )
         inside(
             "python3",
             "-c",
@@ -273,11 +334,29 @@ try:
         )
         # docker start must re-apply changed config without duplicating providers.
         starts_before = len(leader_starts())
+        inside("mkdir", "-p", "/home/node/.claude/skills/manual-smoke")
+        inside(
+            "python3",
+            "-c",
+            "from pathlib import Path; Path.home().joinpath('.claude/skills/manual-smoke/SKILL.md').write_text('manually installed skill')",
+        )
         run("docker", "stop", NAME)
         startup_config["providers"][0].pop("key_env")
         startup_config["providers"][0]["key"] = "rotated-test-key"
         startup_config["claude"]["model"] = "second/mock-model"
         providers.write_text(json.dumps(startup_config))
+        add_skill(skills, "startup-added", "new-after-restart")
+        (git_skills / "startup-git/SKILL.md").write_text(
+            "---\nname: startup-git\ndescription: Updated\n---\nmust-not-auto-update\n"
+        )
+        add_skill(git_skills, "startup-git-added", "new-git-skill")
+        commit_skills()
+        collision = Path(directory, "collision")
+        add_skill(collision, "startup-smoke", "must-not-replace")
+        skill_sources["sources"].append(
+            {"source": "/workspace/collision", "agents": ["claude"]}
+        )
+        skills_config.write_text(json.dumps(skill_sources))
         run("docker", "start", NAME)
         wait_for(lambda: get("localhost")[0] == 200, "Web did not restart")
         wait_for(
@@ -296,6 +375,41 @@ try:
         settings = json.loads(inside("cat", "/home/node/.claude/settings.json"))
         assert "second/mock-model" in settings["model"], settings
         assert inside("cat", "/home/node/.config/magpie/web.key").strip() == key
+        library_after = json.loads(
+            inside("cat", "/home/node/.config/magpie/library.json")
+        )
+        assert sorted(skill["name"] for skill in library_after["skills"]) == [
+            "startup-added",
+            "startup-git",
+            "startup-git-added",
+            "startup-smoke",
+        ]
+        assert "original-git-skill" in inside(
+            "cat", "/home/node/.claude/skills/startup-git/SKILL.md"
+        )
+        assert "new-git-skill" in inside(
+            "cat", "/home/node/.claude/skills/startup-git-added/SKILL.md"
+        )
+        assert "original-skill" in leader_starts()[-1]["skill"]
+        assert (
+            inside("cat", "/home/node/.claude/skills/manual-smoke/SKILL.md")
+            == "manually installed skill"
+        )
+        assert "new-after-restart" in inside(
+            "cat", "/home/node/.claude/skills/startup-added/SKILL.md"
+        )
+        assert next(
+            skill
+            for skill in library_after["skills"]
+            if skill["name"] == "startup-smoke"
+        ) == next(
+            skill
+            for skill in library_before["skills"]
+            if skill["name"] == "startup-smoke"
+        )
+        print(
+            "PASS: restart adds new skills, skips name collisions and preserves existing Library metadata"
+        )
         print(
             "PASS: docker start re-applies providers.yaml, rotates the key and model, and keeps provider IDs stable"
         )
@@ -339,6 +453,8 @@ try:
             f"type=bind,source={directory},target=/workspace",
             "--mount",
             f"type=bind,source={providers},target=/etc/clawteam/providers.yaml,readonly",
+            "--mount",
+            f"type=bind,source={skills_config},target=/etc/clawteam/skills.yaml,readonly",
             "--mount",
             f"type=volume,source={NAME}-home,target=/home/node",
             env.get("CLAWTEAM_IMAGE", "clawteam-local:latest"),
