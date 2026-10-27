@@ -8,12 +8,25 @@ if [[ ${1:-} != start ]]; then
 fi
 shift
 if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
-    echo '错误：/workspace 必须是 Git 仓库；请先在宿主机 git init 并创建一次提交。' >&2
+    echo "错误：$PWD 必须是 Git 仓库；请先在宿主机 git init 并创建一次提交。" >&2
     exit 1
 fi
 if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
     echo '错误：Git 仓库还没有提交，Worker 的 git worktree 需要初始提交。' >&2
     exit 1
+fi
+workspace=$(git rev-parse --show-toplevel)
+cd "$workspace"
+if [[ ! ${CLAWTEAM_LEADER_RESTART_DELAY:-10} =~ ^[1-9][0-9]*$ ]]; then
+    echo 'CLAWTEAM_LEADER_RESTART_DELAY 必须是正整数秒数。' >&2
+    exit 1
+fi
+# Apply the file on every start, including docker start on an existing container.
+CLAWTEAM_MODEL=$(python3 /usr/local/lib/clawteam-docker/magpie_bootstrap.py \
+    "${CLAWTEAM_PROVIDERS_FILE:-/etc/clawteam/providers.yaml}")
+export CLAWTEAM_MODEL
+if [[ -n $CLAWTEAM_MODEL ]]; then
+    unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_MODEL
 fi
 # Keep the browser sign-in stable on the same home volume.
 key_file="$HOME/.config/magpie/web.key"
@@ -43,11 +56,6 @@ for ((i=0; i<150; i++)); do
     sleep 0.2
 done
 if [[ $ready != true ]]; then echo 'Magpie 启动失败。' >&2; exit 1; fi
-if [[ -n ${CLAWTEAM_MODEL:-} ]]; then
-    magpie claude "$CLAWTEAM_MODEL"
-    # Route this Leader and the Workers it spawns using Magpie's settings.
-    unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_MODEL
-fi
 clawteam board serve --host 127.0.0.1 --port 8081 &
 pids+=($!)
 nginx -c /etc/nginx/clawteam.conf -g 'daemon off;' &
@@ -65,13 +73,14 @@ runtime=/usr/local/lib/clawteam-docker/leader_runtime.py
 identity=$(python3 "$runtime" prepare "$CLAWTEAM_TEAM_NAME")
 read -r CLAWTEAM_AGENT_NAME CLAWTEAM_AGENT_ID <<< "$identity"
 export CLAWTEAM_AGENT_NAME CLAWTEAM_AGENT_ID
-export CLAWTEAM_AGENT_TYPE=leader CLAWTEAM_AGENT_LEADER=1 CLAWTEAM_WORKSPACE_DIR=/workspace
+export CLAWTEAM_AGENT_TYPE=leader CLAWTEAM_AGENT_LEADER=1 CLAWTEAM_WORKSPACE_DIR="$workspace"
 prompt="你是团队 $CLAWTEAM_TEAM_NAME 的 Leader，名字是 $CLAWTEAM_AGENT_NAME。团队已注册，直接使用它。请使用 clawteam skill 完成用户任务。使用 clawteam spawn tmux claude 创建 Worker；Leader 和所有 Worker 都必须在本容器运行。收到任务监听通知时，检查任务列表，主动接手未分配的 pending 任务，按需拆分、分配并汇总结果到任务描述。用户任务：${1:-等待面板中的任务。}"
-leader_args=(claude --append-system-prompt "$prompt")
-if [[ -n ${1:-} ]]; then leader_args+=("$1"); fi
+leader_args=(leader-session claude \
+    "${1:-检查团队任务列表，认领并执行 pending 任务；没有任务时等待任务通知。}" \
+    --append-system-prompt "$prompt" --allowedTools 'Bash(clawteam *)')
 printf -v leader_command '%q ' "${leader_args[@]}"
 team_session="clawteam-$CLAWTEAM_TEAM_NAME"
-tmux new-session -d -s "$team_session" -n "$CLAWTEAM_AGENT_NAME" -c /workspace "$leader_command"
+tmux new-session -d -s "$team_session" -n "$CLAWTEAM_AGENT_NAME" -c "$workspace" "$leader_command"
 # The canonical session is required by ClawTeam's runtime-message injector.
 tmux new-session -d -s clawteam -t "$team_session"
 python3 "$runtime" watch "$CLAWTEAM_TEAM_NAME" "$CLAWTEAM_AGENT_NAME" &

@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Check shell syntax
-        run: bash -n clawteam.sh container-entrypoint.sh
+        run: bash -n clawteam.sh container-entrypoint.sh leader-session.sh docker-entrypoint.sh
       - uses: docker/setup-buildx-action@v4
       - name: Build test image
         uses: docker/build-push-action@v7
@@ -40,6 +40,14 @@ jobs:
         env:
           CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}
         run: python3 tests/smoke.py
+      - name: Validate startup configuration
+        run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_magpie_bootstrap.py -v
+      - name: Validate Docker proxy configuration
+        run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_proxy_bootstrap.py -v
+      - name: Verify Docker in Docker
+        env:
+          CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}
+        run: python3 tests/dind_smoke.py
       - name: Verify dashboard task wakeups
         run: docker run --rm -i "${TEST_IMAGE}" python3 - < tests/test_leader_watcher.py
 

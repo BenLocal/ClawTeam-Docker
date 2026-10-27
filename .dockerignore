@@ -2,5 +2,10 @@
 !Dockerfile
 !container-entrypoint.sh
 !leader_runtime.py
+!magpie_bootstrap.py
+!providers.yaml
+!leader-session.sh
+!proxy_bootstrap.py
+!docker-entrypoint.sh
 !nginx.conf
 !subpath.js

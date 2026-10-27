@@ -17,6 +17,9 @@ usage() {
 Web 端口：CLAWTEAM_WEB_PORT（默认 8080）；CLAWTEAM_WEB_BIND（默认 127.0.0.1）
 访问地址：CLAWTEAM_WEB_URL（例如 http://192.168.1.10:8080，无末尾斜线）
 模型路由：CLAWTEAM_MODEL（例如 group/coding；留空沿用 Claude 配置）
+启动配置：CLAWTEAM_PROVIDERS_FILE（宿主机 providers.yaml 路径）
+容器内 Docker：CLAWTEAM_DIND=1（需要 privileged，使用独立数据卷）
+代理：通过 CLAWTEAM_ENV_FILE 传入 HTTP_PROXY、HTTPS_PROXY、NO_PROXY
 构建版本：CLAWTEAM_REF、CLAUDE_VERSION、MAGPIE_VERSION
 HELP
 }
@@ -41,10 +44,19 @@ case "$action" in
         if [[ -n ${CLAWTEAM_ENV_FILE:-} ]]; then
             options+=(--env-file "$CLAWTEAM_ENV_FILE")
         fi
-        for var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAWTEAM_MODEL CLAWTEAM_WEB_URL; do
+        providers_file=$(realpath -- "${CLAWTEAM_PROVIDERS_FILE:-$ROOT/providers.yaml}")
+        [[ -f $providers_file ]] || { echo 'providers.yaml 文件不存在。' >&2; exit 1; }
+        options+=(--mount "type=bind,source=$providers_file,target=/etc/clawteam/providers.yaml,readonly")
+        if [[ ${CLAWTEAM_DIND:-0} == 1 ]]; then
+            options+=(--privileged --user root -e CLAWTEAM_DIND=1 \
+                --mount "type=volume,source=${NAME}-docker,target=/var/lib/docker")
+        fi
+        for var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAWTEAM_MODEL CLAWTEAM_WEB_URL \
+            HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy ALL_PROXY all_proxy; do
             if [[ -n ${!var:-} ]]; then options+=(-e "$var"); fi
         done
         docker run -d --init --name "$NAME" \
+            --restart unless-stopped \
             -p "${CLAWTEAM_WEB_BIND:-127.0.0.1}:${CLAWTEAM_WEB_PORT:-8080}:8080" \
             -e "CLAWTEAM_WEB_PORT=${CLAWTEAM_WEB_PORT:-8080}" \
             --mount "type=bind,source=$project,target=/workspace" \
@@ -53,7 +65,7 @@ case "$action" in
         # Wait until the entrypoint has created the tmux session, or report its error.
         ready=false
         for ((i=0; i<250; i++)); do
-            if docker exec "$NAME" tmux has-session -t clawteam 2>/dev/null; then
+            if docker exec --user node "$NAME" tmux has-session -t clawteam 2>/dev/null; then
                 ready=true; break
             fi
             if [[ $(docker inspect -f '{{.State.Running}}' "$NAME") != true ]]; then break; fi
@@ -61,19 +73,19 @@ case "$action" in
         done
         if [[ $ready != true ]]; then docker logs "$NAME"; exit 1; fi
         if [[ -t 0 && -t 1 ]]; then
-            exec docker exec -it "$NAME" tmux attach-session -t clawteam
+            exec docker exec --user node -it "$NAME" tmux attach-session -t clawteam
         fi
         echo "已启动 ${NAME}；运行 ./clawteam.sh attach 连接 Leader。"
         ;;
-    attach) exec docker exec -it "$NAME" tmux attach-session -t clawteam ;;
-    shell) exec docker exec -it "$NAME" bash ;;
+    attach) exec docker exec --user node -it "$NAME" tmux attach-session -t clawteam ;;
+    shell) exec docker exec --user node -it "$NAME" bash ;;
     web)
-        docker exec "$NAME" bash -c 'base=${CLAWTEAM_WEB_URL:-http://localhost:$CLAWTEAM_WEB_PORT}; printf "ClawTeam: %s/clawteam/\nMagpie:   %s/magpie/?k=%s\n" "$base" "$base" "$(cat "$HOME/.config/magpie/web.key")"'
+        docker exec --user node "$NAME" bash -c 'base=${CLAWTEAM_WEB_URL:-http://localhost:$CLAWTEAM_WEB_PORT}; printf "ClawTeam: %s/clawteam/\nMagpie:   %s/magpie/?k=%s\n" "$base" "$base" "$(cat "$HOME/.config/magpie/web.key")"'
         ;;
     magpie)
         if [[ $# == 0 ]]; then set -- tui; fi
-        if [[ -t 0 && -t 1 ]]; then exec docker exec -it "$NAME" magpie "$@"; fi
-        exec docker exec -i "$NAME" magpie "$@"
+        if [[ -t 0 && -t 1 ]]; then exec docker exec --user node -it "$NAME" magpie "$@"; fi
+        exec docker exec --user node -i "$NAME" magpie "$@"
         ;;
     stop) docker rm -f "$NAME" ;;
     help|-h|--help) usage ;;
