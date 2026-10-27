@@ -267,6 +267,24 @@ try:
             "SMOKE_FIRST_URL=http://127.0.0.1:9101/v1\nSMOKE_SECOND_URL=http://127.0.0.1:9102/v1\n"
         )
         env["CLAWTEAM_ENV_FILE"] = str(git_env)
+        # file:// cloning starts upload-pack with GIT_CONFIG_COUNT removed.
+        # Trust only this fixture's .git directory in the disposable home volume
+        # so Git also accepts it when the host runner and node have different UIDs.
+        run(
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "git",
+            "--mount",
+            f"type=volume,source={NAME}-home,target=/home/node",
+            env.get("CLAWTEAM_IMAGE", "clawteam-local:latest"),
+            "config",
+            "--global",
+            "--add",
+            "safe.directory",
+            "/workspace/git-skills.git/.git",
+        )
         print(run(str(ROOT / "clawteam.sh"), "start", directory, env=env).strip())
         for _ in range(50):
             try:
