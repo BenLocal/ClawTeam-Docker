@@ -88,6 +88,8 @@ volumes:
 
 运行时代理放在 Docker env-file 中，可从 [agent.env.example](agent.env.example) 复制。支持 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 及小写形式，也支持 Agent 和内层容器使用的 `ALL_PROXY`。代理地址需要从容器内可达。启动脚本也会传入宿主环境中已设置的这些变量，优先于 env-file。
 
+同一个 `agent.env` 也可添加部署者自己的环境变量，按 Docker env-file 的 `KEY=value` 格式填写，不需要修改镜像。Compose 使用 `env_file: ./agent.env`，启动脚本使用 `CLAWTEAM_ENV_FILE=/path/to/agent.env`。变量会进入容器环境、Leader、Worker 和 `docker exec` 打开的 shell；DinD 模式的 `clawteam.service` 同样会接收自定义变量，`HOME`、`USER`、`LOGNAME` 保留 node 用户设置。具体变量和值由部署者决定。除代理外，内层 Docker 容器和构建所需的自定义变量仍使用 `docker run --env` 或构建参数显式传入。
+
 代理会应用到 Agent 和 Docker daemon；启动时还会合并 `~/.docker/config.json` 的 `proxies.default`，让内层 `docker build` 和 `docker run` 自动获得代理，同时保留已有的 registry 登录配置。`NO_PROXY` 会自动补上 `localhost`、`127.0.0.1` 和 `::1`，保证 Magpie 的本地请求直连。清空代理变量并重建容器后，会移除之前写入的默认代理。
 
 Docker 环境变量在创建容器时确定。修改 env-file 后，用 `docker compose up -d --force-recreate` 重建服务；`docker start` 或 `docker restart` 会继续使用原来的环境变量。providers.yaml 的内容则在每次启动时重新读取。
