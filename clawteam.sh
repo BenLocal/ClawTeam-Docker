@@ -57,7 +57,10 @@ case "$action" in
         [[ -f $prompt_file ]] || { echo 'prompt.yaml 文件不存在。' >&2; exit 1; }
         options+=(--mount "type=bind,source=$prompt_file,target=/etc/clawteam/prompt.yaml,readonly")
         for config in mcp plugin; do
-            variable="CLAWTEAM_${config^^}_FILE"
+            case "$config" in
+                mcp) variable=CLAWTEAM_MCP_FILE ;;
+                plugin) variable=CLAWTEAM_PLUGIN_FILE ;;
+            esac
             config_file=$(realpath -- "${!variable:-$ROOT/magpie-config/$config.yaml}")
             [[ -f $config_file ]] || { echo "$config.yaml 文件不存在。" >&2; exit 1; }
             options+=(--mount "type=bind,source=$config_file,target=/etc/clawteam/$config.yaml,readonly")
