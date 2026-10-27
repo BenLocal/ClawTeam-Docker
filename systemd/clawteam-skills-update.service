@@ -1,0 +1,14 @@
+[Unit]
+Description=Update Git skills configured for ClawTeam
+Requisite=clawteam.service
+After=clawteam.service
+
+[Service]
+Type=oneshot
+User=node
+Group=node
+EnvironmentFile=/run/clawteam/agent.env
+ExecStart=/opt/venv/bin/python3 /usr/local/lib/clawteam-docker/skills_bootstrap.py --update
+TimeoutStartSec=15min
+StandardOutput=journal+console
+StandardError=journal+console

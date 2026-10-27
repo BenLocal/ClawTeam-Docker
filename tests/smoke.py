@@ -98,6 +98,8 @@ for key in (
     "CLAWTEAM_MODEL",
     "CLAWTEAM_PROVIDERS_FILE",
     "CLAWTEAM_SKILLS_FILE",
+    "CLAWTEAM_SYSTEM_PROMPT",
+    "CLAWTEAM_SYSTEM_PROMPT_FILE",
 ):
     env.pop(key, None)
 
@@ -203,6 +205,11 @@ try:
         }
         skills_config.write_text(json.dumps(skill_sources))
         env["CLAWTEAM_SKILLS_FILE"] = str(skills_config)
+        prompt_file = Path(directory, "system-prompt.txt")
+        custom_prompt = 'Custom prompt: "quotes", $literal, `literal`\n第二行。'
+        prompt_file.write_text(custom_prompt)
+        env["CLAWTEAM_SYSTEM_PROMPT_FILE"] = str(prompt_file)
+        env["CLAWTEAM_SYSTEM_PROMPT"] = "Environment prompt addition"
         # GitHub's runner UID can differ from the image's UID 1000. This is a
         # disposable fixture: allow container writes and explicitly trust it.
         Path(directory).chmod(0o777)
@@ -268,6 +275,14 @@ try:
         first_start = leader_starts()[-1]
         assert first_start["cwd"] == "/workspace", first_start
         assert "--append-system-prompt" in first_start["args"]
+        system_prompt = first_start["args"][
+            first_start["args"].index("--append-system-prompt") + 1
+        ]
+        assert (
+            custom_prompt in system_prompt
+            and "Environment prompt addition" in system_prompt
+        )
+        assert "Leader 和所有 Worker 都必须在本容器运行" in system_prompt
         assert "original-skill" in first_start["skill"], first_start
         library_before = json.loads(
             inside("cat", "/home/node/.config/magpie/library.json")
@@ -345,6 +360,7 @@ try:
         startup_config["providers"][0]["key"] = "rotated-test-key"
         startup_config["claude"]["model"] = "second/mock-model"
         providers.write_text(json.dumps(startup_config))
+        prompt_file.write_text("Updated prompt after restart")
         add_skill(skills, "startup-added", "new-after-restart")
         (git_skills / "startup-git/SKILL.md").write_text(
             "---\nname: startup-git\ndescription: Updated\n---\nmust-not-auto-update\n"
@@ -391,6 +407,7 @@ try:
             "cat", "/home/node/.claude/skills/startup-git-added/SKILL.md"
         )
         assert "original-skill" in leader_starts()[-1]["skill"]
+        assert "Updated prompt after restart" in " ".join(leader_starts()[-1]["args"])
         assert (
             inside("cat", "/home/node/.claude/skills/manual-smoke/SKILL.md")
             == "manually installed skill"
@@ -410,6 +427,110 @@ try:
         print(
             "PASS: restart adds new skills, skips name collisions and preserves existing Library metadata"
         )
+        add_skill(git_skills, "startup-timer-added", "new-from-periodic-update")
+        commit_skills()
+        if DIND:
+            run(
+                "docker",
+                "exec",
+                "--user",
+                "root",
+                NAME,
+                "systemctl",
+                "is-active",
+                "clawteam-skills-update.timer",
+            )
+            run(
+                "docker",
+                "exec",
+                "--user",
+                "root",
+                NAME,
+                "systemctl",
+                "start",
+                "clawteam-skills-update.service",
+            )
+            assert (
+                run(
+                    "docker",
+                    "exec",
+                    "--user",
+                    "root",
+                    NAME,
+                    "systemctl",
+                    "show",
+                    "clawteam-skills-update.service",
+                    "-p",
+                    "Result",
+                    "--value",
+                ).strip()
+                == "success"
+            )
+        else:
+            inside(
+                "python3",
+                "/usr/local/lib/clawteam-docker/skills_bootstrap.py",
+                "--update",
+            )
+        assert "must-not-auto-update" in inside(
+            "cat", "/home/node/.claude/skills/startup-git/SKILL.md"
+        )
+        assert "new-from-periodic-update" in inside(
+            "cat", "/home/node/.claude/skills/startup-timer-added/SKILL.md"
+        )
+        assert (
+            inside("cat", "/home/node/.claude/skills/manual-smoke/SKILL.md")
+            == "manually installed skill"
+        )
+        print(
+            "PASS: periodic Git update refreshes existing skills and adds new ones without restarting Leader"
+        )
+        edited_path = "/home/node/.claude/skills/startup-git/SKILL.md"
+        fetched_content = inside("cat", edited_path)
+        leader_before_update = leader_starts()[-1]["pid"]
+        write_skill = "import sys; from pathlib import Path; Path(sys.argv[1]).write_text(sys.argv[2])"
+        inside(
+            "python3",
+            "-c",
+            write_skill,
+            edited_path,
+            fetched_content + "\nlocal-edit\n",
+        )
+        if DIND:
+            update_command = (
+                "docker",
+                "exec",
+                "--user",
+                "root",
+                NAME,
+                "systemctl",
+                "start",
+                "clawteam-skills-update.service",
+            )
+        else:
+            update_command = (
+                "docker",
+                "exec",
+                "--user",
+                "node",
+                NAME,
+                "python3",
+                "/usr/local/lib/clawteam-docker/skills_bootstrap.py",
+                "--update",
+            )
+        try:
+            run(*update_command)
+        except subprocess.CalledProcessError:
+            pass
+        else:
+            raise AssertionError(
+                "Updating a locally edited skill should report failure"
+            )
+        assert "local-edit" in inside("cat", edited_path)
+        assert leader_starts()[-1]["pid"] == leader_before_update
+        inside("tmux", "has-session", "-t", "clawteam")
+        inside("python3", "-c", write_skill, edited_path, fetched_content)
+        print("PASS: update conflicts preserve local edits and leave Leader running")
         print(
             "PASS: docker start re-applies providers.yaml, rotates the key and model, and keeps provider IDs stable"
         )

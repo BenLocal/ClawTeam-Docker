@@ -18,6 +18,57 @@ spec.loader.exec_module(bootstrap)
 
 
 class SkillsTests(unittest.TestCase):
+    def test_repository_aliases_and_refs(self):
+        self.assertEqual(
+            bootstrap.repository("https://code.example/group/repo.git"),
+            bootstrap.repository("git@code.example:group/repo.git"),
+        )
+        self.assertEqual(
+            bootstrap.repository("https://github.com/owner/repo/tree/main/skills"),
+            bootstrap.repository("owner/repo"),
+        )
+
+    def test_update_leaves_same_named_skill_from_another_source_alone(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory, "skills.yaml")
+            config.write_text(
+                "sources: [{source: 'https://git.example/team/wanted.git', agents: [claude]}]\n"
+            )
+            with (
+                patch.dict(os.environ, {"MAGPIE_WEB_KEY": "test"}),
+                patch.object(bootstrap, "Library") as client,
+            ):
+                client.return_value.request.side_effect = [
+                    {"agents": [{"id": "claude"}]},
+                    {
+                        "kind": "git",
+                        "candidates": [
+                            {"name": "shared", "path": "skills/shared", "have": True}
+                        ],
+                    },
+                    {
+                        "skills": [
+                            {
+                                "name": "shared",
+                                "kind": "git",
+                                "repo": "git.example/another/repo",
+                            }
+                        ]
+                    },
+                ]
+                bootstrap.configure(config, update=True)
+                client.return_value.change.assert_called_once_with("all/sync", {})
+
+    def test_update_reports_local_edits_as_failure(self):
+        with patch.object(
+            bootstrap.Library,
+            "request",
+            return_value={"result": {"unupdated": [{"what": "skill:changed"}]}},
+        ):
+            client = object.__new__(bootstrap.Library)
+            with self.assertRaisesRegex(RuntimeError, "本地修改"):
+                client.change("skills/update-some", {"names": ["changed"]})
+
     def test_validates_all_sources_before_using_library(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory, "skills.yaml")

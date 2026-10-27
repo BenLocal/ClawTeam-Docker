@@ -51,7 +51,7 @@ jobs:
           CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}
         run: python3 tests/dind_smoke.py
       - name: Verify systemd service units
-        run: docker run --rm --user root --entrypoint systemd-analyze "${TEST_IMAGE}" verify /etc/systemd/system/docker.service /etc/systemd/system/clawteam.service
+        run: docker run --rm --user root --entrypoint systemd-analyze "${TEST_IMAGE}" verify /etc/systemd/system/docker.service /etc/systemd/system/clawteam.service /etc/systemd/system/clawteam-skills-update.service /etc/systemd/system/clawteam-skills-update.timer
       - name: Verify ClawTeam with systemd and Docker
         env:
           CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}

@@ -167,6 +167,27 @@ sources:
 
 配置、扫描、安装或同步失败时，启动会退出，Leader 不会运行；通过 `docker logs` 查看错误。导入使用持久化的 Magpie Web Key 认证，不需要在 `skills.yaml` 填 Key。自带的 ClawTeam 技能继续由镜像提供。
 
+启用 DinD/systemd 时，`clawteam-skills-update.timer` 会在启动约 5 分钟后、随后每小时触发一次更新，另有最多 1 分钟的随机延迟。更新服务只处理 `skills.yaml` 中的 Git 来源，补入新技能并通过 Library 更新已安装的同源技能，随后同步给 Agent。手工安装或其他来源的同名技能不参与更新；本地修改冲突和仓库中已删除的技能会保留并报告失败，下次定时执行会再次尝试。已有 Claude 会话可能缓存技能内容，更新后新建会话使用新内容。
+
+```bash
+docker exec --user root clawteam systemctl list-timers clawteam-skills-update.timer
+docker exec --user root clawteam systemctl start clawteam-skills-update.service
+docker exec --user root clawteam journalctl -u clawteam-skills-update.service --no-pager -n 50
+```
+
+调整周期时，在 `/etc/systemd/system/clawteam-skills-update.timer.d/override.conf` 中设置 `[Timer]` 下的 `OnUnitActiveSec=30min`，再执行 `systemctl daemon-reload` 和 `systemctl restart clawteam-skills-update.timer`。需要跨容器重建保留时挂载该目录。未启用 systemd 时，可手动运行 `docker exec --user node clawteam python3 /usr/local/lib/clawteam-docker/skills_bootstrap.py --update`。更新服务沿用容器的 Git 认证和代理环境；失败只影响本次更新，不重启 Leader。
+
+## 追加 Leader 系统提示词
+
+`CLAWTEAM_SYSTEM_PROMPT` 可以直接提供附加提示词，`CLAWTEAM_SYSTEM_PROMPT_FILE` 可以指定 UTF-8 文本文件。两者同时设置时，依次追加环境变量内容和文件内容；ClawTeam 自带的团队与任务指令仍会保留。内容会作为 `--append-system-prompt` 传给 Leader，不执行其中的 Shell 文本。需要 Worker 遵循的约定，可在附加提示词中要求 Leader 将约定传给 Worker。
+
+```bash
+CLAWTEAM_SYSTEM_PROMPT='请用中文汇报进度。' \
+CLAWTEAM_SYSTEM_PROMPT_FILE=./system-prompt.txt ./clawteam.sh start /你的Git项目
+```
+
+通过脚本启动时，文件变量指向宿主机文件；通过 Docker/Compose 启动时，先把文件只读挂载到 `/etc/clawteam/system-prompt.txt`，并在 env-file 中设置 `CLAWTEAM_SYSTEM_PROMPT_FILE=/etc/clawteam/system-prompt.txt`。文件修改后重启容器；环境变量修改后用 Compose 重建容器。显式配置的文件不可读时会停止启动，避免漏掉用户指令。
+
 多个模型可通过 YAML 创建路由组：
 
 ```yaml

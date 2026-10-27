@@ -12,5 +12,6 @@
 !systemd_runtime.py
 !systemd/
 !systemd/*.service
+!systemd/*.timer
 !nginx.conf
 !subpath.js

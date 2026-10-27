@@ -1,0 +1,12 @@
+[Unit]
+Description=Check configured ClawTeam Git skills hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=1min
+Persistent=true
+Unit=clawteam-skills-update.service
+
+[Install]
+WantedBy=timers.target

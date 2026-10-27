@@ -1,5 +1,6 @@
 """Import configured sources through Magpie Library before starting the Leader."""
 
+import argparse
 import http.cookiejar
 import json
 import os
@@ -69,20 +70,41 @@ class Library:
         if not isinstance(view, dict) or not isinstance(view.get("result"), dict):
             raise TypeError("Magpie Library 未返回操作结果。")
         result = view["result"]
-        if view.get("problems") or result.get("skipped"):
+        if view.get("problems") or any(
+            result.get(field) for field in ("skipped", "unupdated", "gone")
+        ):
             raise RuntimeError(
-                "Magpie Library 安装或同步存在冲突，请在 Library 页面检查。"
+                "Magpie Library 安装、更新或同步未全部完成；请检查连接和本地修改。"
             )
         return result
 
 
-def configure(path):
+def repository(source):
+    """Compare repository identities without credentials, refs or subfolders."""
+    for marker in (
+        "/-/tree/",
+        "/-/blob/",
+        "/src/branch/",
+        "/src/tag/",
+        "/src/commit/",
+        "/tree/",
+    ):
+        source = source.split(marker, 1)[0]
+    if "://" in source:
+        url = urllib.parse.urlsplit(source)
+        source = (url.netloc.rsplit("@", 1)[-1] + url.path).removeprefix("github.com/")
+    elif "@" in source and ":" in source:
+        source = source.split("@", 1)[1].replace(":", "/", 1)
+    return source.rstrip("/").removesuffix(".git").casefold()
+
+
+def configure(path, *, update=False):
     sources = read_sources(path)
     if not sources:
         return
     key = os.environ.get("MAGPIE_WEB_KEY", "").strip()
     if not key:
-        raise ValueError("导入 skills 需要 MAGPIE_WEB_KEY。")
+        key = Path.home().joinpath(".config/magpie/web.key").read_text().strip()
     library = Library(key)
     view = library.request("/api/library")
     agents = view.get("agents") if isinstance(view, dict) else None
@@ -93,6 +115,8 @@ def configure(path):
         if not set(item["agents"]) <= known_agents:
             raise ValueError(f"skills.yaml 来源 {index} 包含 Magpie 未识别的 Agent。")
     for index, item in enumerate(sources, 1):
+        if update and Path(item["source"]).expanduser().is_absolute():
+            continue
         probe = library.request("/api/library/skills/probe", {"source": item["source"]})
         candidates = probe.get("candidates") if isinstance(probe, dict) else None
         if not isinstance(candidates, list) or not candidates:
@@ -105,12 +129,12 @@ def configure(path):
                 or not isinstance(candidate.get("have"), bool)
             ):
                 raise TypeError("Magpie Library 返回了无效扫描结果。")
-            if candidate["have"]:
+            if candidate["have"] and not update:
                 print(
                     f"skills: 来源 {index} 已存在 {candidate.get('name', '')}，保留原配置。",
                     flush=True,
                 )
-            else:
+            elif not candidate["have"]:
                 paths.append(candidate["path"])
         if paths:
             result = library.change(
@@ -121,12 +145,41 @@ def configure(path):
                 f"skills: 来源 {index} 已安装 {len(result.get('installed') or [])} 个技能。",
                 flush=True,
             )
+        if update and probe.get("kind") in {"git", "github"}:
+            current = library.request("/api/library").get("skills", [])
+            wanted = {candidate["name"] for candidate in candidates}
+            names = [
+                skill["name"]
+                for skill in current
+                if skill["name"] in wanted
+                and skill.get("kind") in {"git", "github"}
+                and repository(skill.get("source") or skill.get("repo", ""))
+                == repository(item["source"])
+            ]
+            if names:
+                result = library.change("skills/update-some", {"names": names})
+                print(
+                    f"skills: 来源 {index} 已更新 {len(result.get('updated') or [])} 个技能。",
+                    flush=True,
+                )
     library.change("all/sync", {})
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Update configured Git skills while preserving local edits",
+    )
+    parser.add_argument(
+        "path",
+        nargs="?",
+        default=os.environ.get("CLAWTEAM_SKILLS_FILE", "/etc/clawteam/skills.yaml"),
+    )
+    args = parser.parse_args()
     try:
-        configure(Path(sys.argv[1]))
+        configure(Path(args.path), update=args.update)
     except (OSError, ValueError, TypeError, RuntimeError, yaml.YAMLError) as error:
         print(f"技能启动配置失败：{error}", file=sys.stderr)
         sys.exit(1)

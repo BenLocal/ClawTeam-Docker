@@ -19,6 +19,7 @@ Web 端口：CLAWTEAM_WEB_PORT（默认 8080）；CLAWTEAM_WEB_BIND（默认 127
 模型路由：CLAWTEAM_MODEL（例如 group/coding；留空沿用 Claude 配置）
 启动配置：CLAWTEAM_PROVIDERS_FILE（宿主机 providers.yaml 路径）
 技能来源：CLAWTEAM_SKILLS_FILE（宿主机 skills.yaml 路径）
+附加系统提示词：CLAWTEAM_SYSTEM_PROMPT；CLAWTEAM_SYSTEM_PROMPT_FILE（宿主机文本路径）
 容器内 Docker：CLAWTEAM_DIND=1（需要 privileged，使用独立数据卷）
 代理：通过 CLAWTEAM_ENV_FILE 传入 HTTP_PROXY、HTTPS_PROXY、NO_PROXY
 构建版本：CLAWTEAM_REF、CLAUDE_VERSION、MAGPIE_VERSION
@@ -51,6 +52,12 @@ case "$action" in
         skills_file=$(realpath -- "${CLAWTEAM_SKILLS_FILE:-$ROOT/skills.yaml}")
         [[ -f $skills_file ]] || { echo 'skills.yaml 文件不存在。' >&2; exit 1; }
         options+=(--mount "type=bind,source=$skills_file,target=/etc/clawteam/skills.yaml,readonly")
+        if [[ -n ${CLAWTEAM_SYSTEM_PROMPT_FILE:-} ]]; then
+            prompt_file=$(realpath -- "$CLAWTEAM_SYSTEM_PROMPT_FILE")
+            [[ -f $prompt_file ]] || { echo '系统提示词文件不存在。' >&2; exit 1; }
+            options+=(--mount "type=bind,source=$prompt_file,target=/etc/clawteam/system-prompt.txt,readonly" \
+                -e CLAWTEAM_SYSTEM_PROMPT_FILE=/etc/clawteam/system-prompt.txt)
+        fi
         init_options=(--init)
         if [[ ${CLAWTEAM_DIND:-0} == 1 ]]; then
             init_options=(--init=false)
@@ -59,7 +66,7 @@ case "$action" in
                 --tmpfs /run --tmpfs /tmp:mode=1777 \
                 --mount "type=volume,source=${NAME}-docker,target=/var/lib/docker")
         fi
-        for var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAWTEAM_MODEL CLAWTEAM_WEB_URL \
+        for var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAWTEAM_MODEL CLAWTEAM_WEB_URL CLAWTEAM_SYSTEM_PROMPT \
             HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy ALL_PROXY all_proxy; do
             if [[ -n ${!var:-} ]]; then options+=(-e "$var"); fi
         done

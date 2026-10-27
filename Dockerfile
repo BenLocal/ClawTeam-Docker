@@ -34,7 +34,7 @@ COPY skills_bootstrap.py /usr/local/lib/clawteam-docker/skills_bootstrap.py
 COPY proxy_bootstrap.py /usr/local/lib/clawteam-docker/proxy_bootstrap.py
 COPY systemd_runtime.py /usr/local/lib/clawteam-docker/systemd_runtime.py
 COPY systemd/ /etc/systemd/system/
-RUN systemctl enable docker.service clawteam.service \
+RUN systemctl enable docker.service clawteam.service clawteam-skills-update.timer \
     && systemctl mask getty.target console-getty.service systemd-udevd.service \
        systemd-udevd-control.socket systemd-udevd-kernel.socket systemd-logind.service \
     && truncate -s 0 /etc/machine-id \
