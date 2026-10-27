@@ -46,6 +46,14 @@ jobs:
         run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_proxy_bootstrap.py -v
       - name: Validate skill imports
         run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_skills_bootstrap.py -v
+      - name: Validate Instructions imports
+        run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_prompt_bootstrap.py -v
+      - name: Validate MCP imports
+        run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_mcp_bootstrap.py -v
+      - name: Validate native plugin imports and mirror proxy
+        env:
+          CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}
+        run: python3 tests/plugin_smoke.py
       - name: Verify Docker in Docker
         env:
           CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}

@@ -4,8 +4,11 @@
 !leader_runtime.py
 !magpie_bootstrap.py
 !skills_bootstrap.py
-!skills.yaml
-!providers.yaml
+!prompt_bootstrap.py
+!mcp_bootstrap.py
+!plugin_bootstrap.py
+!magpie-config/
+!magpie-config/*.yaml
 !leader-session.sh
 !proxy_bootstrap.py
 !docker-entrypoint.sh

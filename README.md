@@ -9,7 +9,7 @@ CLAWTEAM_ENV_FILE=/绝对路径/agent.env \
   ./clawteam.sh start /绝对路径/你的项目 "创建团队，实现登录功能并验证"
 ```
 
-先编辑 `providers.yaml`，或用 `CLAWTEAM_PROVIDERS_FILE=/path/to/providers.yaml` 指定文件。默认配置通过环境变量 `LLM_API_BASE` 读取你的 OpenAI 兼容网关地址，因此 `agent.env` 至少需要 `LLM_API_BASE=http://your-gateway:8000/v1`。每次启动都会导入该文件并配置 Claude，凭据通过环境变量或挂载文件提供，不需要写入镜像。没有选择 Magpie 模型时，仍可使用 Claude 自身的登录配置。
+先编辑 `magpie-config/providers.yaml`，或用 `CLAWTEAM_PROVIDERS_FILE=/path/to/providers.yaml` 指定文件。默认配置通过环境变量 `LLM_API_BASE` 读取你的 OpenAI 兼容网关地址，因此 `agent.env` 至少需要 `LLM_API_BASE=http://your-gateway:8000/v1`。每次启动都会导入该文件并配置 Claude，凭据通过环境变量或挂载文件提供，不需要写入镜像。没有选择 Magpie 模型时，仍可使用 Claude 自身的登录配置。
 
 容器启动时自动注册 `clawteam-docker` 团队和 Leader，并启动任务监听器，每 5 秒检查一次变化。在 `/clawteam/` 中选择该团队，通过 New Task 新增任务后，监听器会通知 Leader 读取任务、分配 Worker 并更新状态。配置了 Magpie 模型后，会为挂载的 Git 工作目录完成首次引导和信任设置，并允许 Leader 使用 `clawteam` 命令；其他工具操作仍遵循 Claude 的权限设置，需要人工确认时通过 `./clawteam.sh attach` 操作。镜像已为 Claude 安装官方 ClawTeam skill。已有团队会复用，实际 Worker 在 Leader 分配任务时才创建。
 
@@ -140,8 +140,7 @@ services:
     env_file: agent.env
     volumes:
       - /你的Git项目:/workspace
-      - ./providers.yaml:/etc/clawteam/providers.yaml:ro
-      - ./skills.yaml:/etc/clawteam/skills.yaml:ro
+      - ./magpie-config:/etc/clawteam:ro
       - clawteam-home:/home/node
 volumes:
   clawteam-home:
@@ -151,7 +150,7 @@ volumes:
 
 ## 启动时导入技能
 
-编辑 `skills.yaml`，填写容器内的本地目录或 Magpie 支持的 Git 仓库地址：
+编辑 `magpie-config/skills.yaml`，填写容器内的本地目录或 Magpie 支持的 Git 仓库地址：
 
 ```yaml
 sources:
@@ -161,13 +160,13 @@ sources:
     agents: [claude]
 ```
 
-`./clawteam.sh start` 默认挂载仓库中的 `skills.yaml`，也可用 `CLAWTEAM_SKILLS_FILE=/path/to/skills.yaml` 选择宿主机文件。Compose 按上例挂载。直接运行 Docker 时，可挂载到 `/etc/clawteam/skills.yaml`，或通过容器环境变量 `CLAWTEAM_SKILLS_FILE` 指定其他容器内路径。默认 `sources: []` 不导入技能。
+`./clawteam.sh start` 默认挂载仓库中的 `magpie-config/skills.yaml`，也可用 `CLAWTEAM_SKILLS_FILE=/path/to/skills.yaml` 选择宿主机文件。Compose 按上例挂载。直接运行 Docker 时，可挂载到 `/etc/clawteam/skills.yaml`，或通过容器环境变量 `CLAWTEAM_SKILLS_FILE` 指定其他容器内路径。默认 `sources: []` 不导入技能。
 
 每次启动都会在 Magpie 就绪后扫描来源，通过 Library 安装新技能并同步，然后启动 Leader。已有同名技能会跳过并记录日志，保留其内容、来源和 Agent 分配；删除来源条目不会卸载技能。后续修改已有技能的分配或更新远端内容，请在 Magpie 的 Library 页面操作。本地目录使用链接，文件改动直接可见；远端技能不会在启动时自动覆盖更新。私有仓库使用容器用户自己的 Git 凭据，访问权限需预先配置。
 
-配置、扫描、安装或同步失败时，启动会退出，Leader 不会运行；通过 `docker logs` 查看错误。导入使用持久化的 Magpie Web Key 认证，不需要在 `skills.yaml` 填 Key。自带的 ClawTeam 技能继续由镜像提供。
+配置、扫描、安装或同步失败时，启动会退出，Leader 不会运行；通过 `docker logs` 查看错误。导入使用持久化的 Magpie Web Key 认证，不需要在 `magpie-config/skills.yaml` 填 Key。自带的 ClawTeam 技能继续由镜像提供。
 
-启用 DinD/systemd 时，`clawteam-skills-update.timer` 会在启动约 5 分钟后、随后每小时触发一次更新，另有最多 1 分钟的随机延迟。更新服务只处理 `skills.yaml` 中的 Git 来源，补入新技能并通过 Library 更新已安装的同源技能，随后同步给 Agent。手工安装或其他来源的同名技能不参与更新；本地修改冲突和仓库中已删除的技能会保留并报告失败，下次定时执行会再次尝试。已有 Claude 会话可能缓存技能内容，更新后新建会话使用新内容。
+启用 DinD/systemd 时，`clawteam-skills-update.timer` 会在启动约 5 分钟后、随后每小时触发一次更新，另有最多 1 分钟的随机延迟。更新服务只处理 `magpie-config/skills.yaml` 中的 Git 来源，补入新技能并通过 Library 更新已安装的同源技能，随后同步给 Agent。手工安装或其他来源的同名技能不参与更新；本地修改冲突和仓库中已删除的技能会保留并报告失败，下次定时执行会再次尝试。已有 Claude 会话可能缓存技能内容，更新后新建会话使用新内容。
 
 ```bash
 docker exec --user root clawteam systemctl list-timers clawteam-skills-update.timer
@@ -177,16 +176,81 @@ docker exec --user root clawteam journalctl -u clawteam-skills-update.service --
 
 调整周期时，在 `/etc/systemd/system/clawteam-skills-update.timer.d/override.conf` 中设置 `[Timer]` 下的 `OnUnitActiveSec=30min`，再执行 `systemctl daemon-reload` 和 `systemctl restart clawteam-skills-update.timer`。需要跨容器重建保留时挂载该目录。未启用 systemd 时，可手动运行 `docker exec --user node clawteam python3 /usr/local/lib/clawteam-docker/skills_bootstrap.py --update`。更新服务沿用容器的 Git 认证和代理环境；失败只影响本次更新，不重启 Leader。
 
-## 追加 Leader 系统提示词
+## Magpie 配置目录
 
-`CLAWTEAM_SYSTEM_PROMPT` 可以直接提供附加提示词，`CLAWTEAM_SYSTEM_PROMPT_FILE` 可以指定 UTF-8 文本文件。两者同时设置时，依次追加环境变量内容和文件内容；ClawTeam 自带的团队与任务指令仍会保留。内容会作为 `--append-system-prompt` 传给 Leader，不执行其中的 Shell 文本。需要 Worker 遵循的约定，可在附加提示词中要求 Leader 将约定传给 Worker。
+`magpie-config/` 集中存放 `providers.yaml`、`skills.yaml`、`prompt.yaml`、`mcp.yaml` 和 `plugin.yaml`。使用 Compose 时将这个目录只读挂载到 `/etc/clawteam`；`agent.env` 留在外层。镜像默认包含 Node.js 22 和 npm，MCP 依赖可以在启动时按 YAML 安装。
 
-```bash
-CLAWTEAM_SYSTEM_PROMPT='请用中文汇报进度。' \
-CLAWTEAM_SYSTEM_PROMPT_FILE=./system-prompt.txt ./clawteam.sh start /你的Git项目
+## 导入 Instructions
+
+编辑 `magpie-config/prompt.yaml`，通过 Magpie Instructions 管理用户指令：
+
+```yaml
+instructions:
+  shared: |
+    请使用中文汇报进度。
+  agents: [claude]
+  extra:
+    claude: |
+      完成任务后说明改动和验证结果。
 ```
 
-通过脚本启动时，文件变量指向宿主机文件；通过 Docker/Compose 启动时，先把文件只读挂载到 `/etc/clawteam/system-prompt.txt`，并在 env-file 中设置 `CLAWTEAM_SYSTEM_PROMPT_FILE=/etc/clawteam/system-prompt.txt`。文件修改后重启容器；环境变量修改后用 Compose 重建容器。显式配置的文件不可读时会停止启动，避免漏掉用户指令。
+`shared` 是当前启用指令集的共享内容，`agents` 指定接收指令的 Agent，`extra` 是各 Agent 的附加内容。只更新文件中明确配置的字段，未配置字段保留；`shared: ""` 或 `extra: {claude: ""}` 清空对应文本，`agents: []` 停用分发。默认 `instructions: {}` 保留现有配置，不发起导入。
+
+`./clawteam.sh start` 默认挂载仓库中的 `magpie-config/prompt.yaml`，可用 `CLAWTEAM_PROMPT_FILE=/path/to/prompt.yaml` 选择宿主机文件。Docker/Compose 将文件只读挂载到 `/etc/clawteam/prompt.yaml`；需要其他容器内路径时设置 `CLAWTEAM_PROMPT_FILE`。每次启动都会在 Magpie 就绪后、Leader 启动前导入。修改后重启容器即可生效，重复导入不会叠加文本。
+
+Magpie 会把指令写入 Agent 的用户级指令文件，例如 Claude 的 `~/.claude/CLAUDE.md`，Leader 和新启动的 Worker 都可读取；Magpie 管理区外的手工内容会保留。YAML 中配置的字段会在每次启动时覆盖对应 Library 值。配置或同步失败时不启动 Leader。ClawTeam 运行所需的团队身份与任务调度指令仍由入口提供。
+
+## 预装 MCP 和插件
+
+`magpie-config/mcp.yaml` 使用完整的 MCP 服务定义，按名称创建或更新，未列出的服务会保留：
+
+```yaml
+servers:
+  - name: local-tools
+    transport: stdio
+    command: python3
+    args: [/workspace/mcp/server.py]
+    env:
+      MODE: "production"
+    agents: [claude]
+  - name: remote-tools
+    transport: http
+    url: https://mcp.example.com/mcp
+    headers: {}
+    agents: [claude]
+```
+
+`transport` 支持 `stdio`、`http` 和 `sse`。命令参数、环境变量和请求头中的值必须是字符串。服务通过 Library 同步到 Agent；配置导入不代表服务端已连通，远端认证和 YAML 未声明的运行依赖需要部署者准备。默认 `servers: []` 不改动现有 MCP 配置。包含凭据的 YAML 应放在仓库外，限制宿主机权限并允许 UID 1000 读取。
+
+每个 MCP 服务可以用 `install` 声明安装命令和检查命令，均为参数列表。例如：
+
+```yaml
+servers:
+  - name: codegraph
+    transport: stdio
+    install:
+      command: [npm, install, --global, --prefix, /home/node/.local, "@colbymchenry/codegraph@1.6.2", --prefer-offline, --no-audit, --no-fund]
+      check: [/home/node/.local/bin/codegraph, --version]
+    command: /home/node/.local/bin/codegraph
+    args: [serve, --mcp]
+    agents: [claude]
+```
+
+安装以容器用户 `node` 执行，直接运行参数列表，不通过 Shell 解释。建议使用持久化 home 卷下的 `/home/node/.local` 安装目录。每次启动先执行 `check`；同一安装配置已成功执行且检查通过时跳过安装。安装命令变化或依赖缺失时重新安装，安装完成后再次检查，失败则不启动 Leader。安装命令最多等待 10 分钟，检查命令最多等待 1 分钟；成功记录保存在 home 卷，`install` 不会写入 Agent 的 MCP 定义。
+
+`magpie-config/plugin.yaml` 使用插件来源列表，语法与 `magpie plugin add` 一致：
+
+```yaml
+plugins:
+  - "@your-org/magpie-plugin@1.0.0"
+  - /workspace/my-plugin.js
+```
+
+支持 Magpie 原生的社区名称、npm 包、Git 来源和容器内路径。已有插件保留启用状态与选项，不重复添加；修改来源或版本后在下次启动安装。删除列表条目不会卸载插件。安装依赖、Bun 下载和插件登录沿用 Magpie 原生行为；需要账号的插件仍需完成登录。默认 `plugins: []` 不安装插件。
+
+启动脚本默认挂载这两个文件，也可通过宿主机环境变量 `CLAWTEAM_MCP_FILE`、`CLAWTEAM_PLUGIN_FILE` 指定文件。Docker/Compose 分别挂载到 `/etc/clawteam/mcp.yaml`、`/etc/clawteam/plugin.yaml`。这些配置在 Magpie 就绪后、Leader 启动前导入，修改后重启容器生效。
+
+下载代理通过容器环境变量 `MIRROR_HTTP_PROXY` 提供，填写容器能访问的代理地址。非空时优先设置 HTTP/HTTPS 代理，并传给 Git、插件安装、Magpie 和内层 Docker；原有 `NO_PROXY` 保留并补上本机地址。Magpie 内部配置 API 直接访问本机。变量未设置时继续使用现有的 `HTTP_PROXY`、`HTTPS_PROXY` 配置。
 
 多个模型可通过 YAML 创建路由组：
 

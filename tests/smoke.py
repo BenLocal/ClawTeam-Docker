@@ -21,7 +21,7 @@ FAKE_CLAUDE = """\
 import json, os, sys, time
 from pathlib import Path
 with (Path.home() / "leader-starts.jsonl").open("a") as f:
-    f.write(json.dumps({"pid": os.getpid(), "cwd": os.getcwd(), "args": sys.argv[1:], "skill": (Path.home() / ".claude/skills/startup-smoke/SKILL.md").read_text()}) + "\\n")
+    f.write(json.dumps({"pid": os.getpid(), "cwd": os.getcwd(), "args": sys.argv[1:], "skill": (Path.home() / ".claude/skills/startup-smoke/SKILL.md").read_text(), "instructions": (Path.home() / ".claude/CLAUDE.md").read_text()}) + "\\n")
 while True:
     time.sleep(1)
 """
@@ -98,8 +98,9 @@ for key in (
     "CLAWTEAM_MODEL",
     "CLAWTEAM_PROVIDERS_FILE",
     "CLAWTEAM_SKILLS_FILE",
-    "CLAWTEAM_SYSTEM_PROMPT",
-    "CLAWTEAM_SYSTEM_PROMPT_FILE",
+    "CLAWTEAM_PROMPT_FILE",
+    "CLAWTEAM_MCP_FILE",
+    "CLAWTEAM_PLUGIN_FILE",
 ):
     env.pop(key, None)
 
@@ -205,11 +206,52 @@ try:
         }
         skills_config.write_text(json.dumps(skill_sources))
         env["CLAWTEAM_SKILLS_FILE"] = str(skills_config)
-        prompt_file = Path(directory, "system-prompt.txt")
+        prompt_file = Path(directory, "prompt.yaml")
         custom_prompt = 'Custom prompt: "quotes", $literal, `literal`\n第二行。'
-        prompt_file.write_text(custom_prompt)
-        env["CLAWTEAM_SYSTEM_PROMPT_FILE"] = str(prompt_file)
-        env["CLAWTEAM_SYSTEM_PROMPT"] = "Environment prompt addition"
+        prompt_config = {
+            "instructions": {
+                "shared": custom_prompt,
+                "agents": ["claude"],
+                "extra": {"claude": "Agent extra instructions"},
+            }
+        }
+        prompt_file.write_text(json.dumps(prompt_config))
+        env["CLAWTEAM_PROMPT_FILE"] = str(prompt_file)
+        mcp_file = Path(directory, "mcp.yaml")
+        mcp_config = {
+            "servers": [
+                {
+                    "name": "startup-stdio",
+                    "transport": "stdio",
+                    "command": "python3",
+                    "args": ["/workspace/example-mcp.py"],
+                    "env": {"FIXTURE": "original"},
+                    "agents": ["claude"],
+                },
+                {
+                    "name": "startup-http",
+                    "transport": "http",
+                    "url": "http://127.0.0.1:9/mcp",
+                    "headers": {"X-Fixture": "original"},
+                    "agents": ["claude"],
+                },
+            ]
+        }
+        mcp_file.write_text(json.dumps(mcp_config))
+        mcp_config["servers"][0]["install"] = {
+            "command": [
+                "python3",
+                "-c",
+                "from pathlib import Path; p=Path('/workspace/mcp-install-count'); p.write_text(p.read_text()+'x' if p.exists() else 'x')",
+            ],
+            "check": [
+                "python3",
+                "-c",
+                "from pathlib import Path; raise SystemExit(0 if Path('/workspace/mcp-install-count').exists() else 1)",
+            ],
+        }
+        mcp_file.write_text(json.dumps(mcp_config))
+        env["CLAWTEAM_MCP_FILE"] = str(mcp_file)
         # GitHub's runner UID can differ from the image's UID 1000. This is a
         # disposable fixture: allow container writes and explicitly trust it.
         Path(directory).chmod(0o777)
@@ -278,11 +320,15 @@ try:
         system_prompt = first_start["args"][
             first_start["args"].index("--append-system-prompt") + 1
         ]
-        assert (
-            custom_prompt in system_prompt
-            and "Environment prompt addition" in system_prompt
-        )
+        assert custom_prompt not in system_prompt
+        assert custom_prompt in first_start["instructions"]
+        assert "Agent extra instructions" in first_start["instructions"]
         assert "Leader 和所有 Worker 都必须在本容器运行" in system_prompt
+        inside(
+            "python3",
+            "-c",
+            "from pathlib import Path; p=Path.home()/'.claude/CLAUDE.md'; p.write_text(p.read_text()+'\\nManually maintained instruction\\n')",
+        )
         assert "original-skill" in first_start["skill"], first_start
         library_before = json.loads(
             inside("cat", "/home/node/.config/magpie/library.json")
@@ -300,6 +346,19 @@ try:
         )
         print(
             "PASS: Library installs skills before Leader and preserves the bundled ClawTeam skill"
+        )
+        claude_state = json.loads(inside("cat", "/home/node/.claude.json"))
+        assert (
+            claude_state["mcpServers"]["startup-stdio"]["env"]["FIXTURE"] == "original"
+        )
+        assert (
+            claude_state["mcpServers"]["startup-http"]["url"]
+            == "http://127.0.0.1:9/mcp"
+        )
+        inside(
+            "python3",
+            "-c",
+            "import json; from pathlib import Path; p=Path.home()/'.claude.json'; d=json.loads(p.read_text()); d['mcpServers']['manual-mcp']={'type':'stdio','command':'/bin/true'}; p.write_text(json.dumps(d))",
         )
         inside(
             "python3",
@@ -360,8 +419,12 @@ try:
         startup_config["providers"][0]["key"] = "rotated-test-key"
         startup_config["claude"]["model"] = "second/mock-model"
         providers.write_text(json.dumps(startup_config))
-        prompt_file.write_text("Updated prompt after restart")
+        prompt_config["instructions"]["shared"] = "Updated prompt after restart"
+        prompt_file.write_text(json.dumps(prompt_config))
         add_skill(skills, "startup-added", "new-after-restart")
+        mcp_config["servers"][0]["env"]["FIXTURE"] = "updated"
+        mcp_config["servers"][1]["headers"]["X-Fixture"] = "updated"
+        mcp_file.write_text(json.dumps(mcp_config))
         (git_skills / "startup-git/SKILL.md").write_text(
             "---\nname: startup-git\ndescription: Updated\n---\nmust-not-auto-update\n"
         )
@@ -407,7 +470,36 @@ try:
             "cat", "/home/node/.claude/skills/startup-git-added/SKILL.md"
         )
         assert "original-skill" in leader_starts()[-1]["skill"]
-        assert "Updated prompt after restart" in " ".join(leader_starts()[-1]["args"])
+        instructions = leader_starts()[-1]["instructions"]
+        assert "Updated prompt after restart" in instructions
+        assert custom_prompt not in instructions
+        assert "Manually maintained instruction" in instructions
+        assert instructions.count("<!-- magpie:begin") == 1
+        print(
+            "PASS: prompt.yaml imports shared/extra Instructions before Leader, updates without duplicates and preserves user text"
+        )
+        claude_state = json.loads(inside("cat", "/home/node/.claude.json"))
+        assert (
+            claude_state["mcpServers"]["startup-stdio"]["env"]["FIXTURE"] == "updated"
+        )
+        assert (
+            claude_state["mcpServers"]["startup-http"]["headers"]["X-Fixture"]
+            == "updated"
+        )
+        assert claude_state["mcpServers"]["manual-mcp"]["command"] == "/bin/true"
+        saved_library = json.loads(
+            inside("cat", "/home/node/.config/magpie/library.json")
+        )
+        assert len(saved_library["mcp"]) == 2
+        assert inside("cat", "/workspace/mcp-install-count") == "x"
+        assert "install" not in next(
+            server
+            for server in saved_library["mcp"]
+            if server["name"] == "startup-stdio"
+        )
+        print(
+            "PASS: mcp.yaml installs stdio/HTTP definitions, updates by name and preserves manual MCP servers"
+        )
         assert (
             inside("cat", "/home/node/.claude/skills/manual-smoke/SKILL.md")
             == "manually installed skill"
@@ -576,6 +668,10 @@ try:
             f"type=bind,source={providers},target=/etc/clawteam/providers.yaml,readonly",
             "--mount",
             f"type=bind,source={skills_config},target=/etc/clawteam/skills.yaml,readonly",
+            "--mount",
+            f"type=bind,source={prompt_file},target=/etc/clawteam/prompt.yaml,readonly",
+            "--mount",
+            f"type=bind,source={mcp_file},target=/etc/clawteam/mcp.yaml,readonly",
             "--mount",
             f"type=volume,source={NAME}-home,target=/home/node",
             env.get("CLAWTEAM_IMAGE", "clawteam-local:latest"),

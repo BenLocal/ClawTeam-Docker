@@ -19,9 +19,10 @@ Web 端口：CLAWTEAM_WEB_PORT（默认 8080）；CLAWTEAM_WEB_BIND（默认 127
 模型路由：CLAWTEAM_MODEL（例如 group/coding；留空沿用 Claude 配置）
 启动配置：CLAWTEAM_PROVIDERS_FILE（宿主机 providers.yaml 路径）
 技能来源：CLAWTEAM_SKILLS_FILE（宿主机 skills.yaml 路径）
-附加系统提示词：CLAWTEAM_SYSTEM_PROMPT；CLAWTEAM_SYSTEM_PROMPT_FILE（宿主机文本路径）
+Instructions 配置：CLAWTEAM_PROMPT_FILE（宿主机 prompt.yaml 路径）
+MCP 配置：CLAWTEAM_MCP_FILE；插件列表：CLAWTEAM_PLUGIN_FILE（宿主机 YAML 路径）
 容器内 Docker：CLAWTEAM_DIND=1（需要 privileged，使用独立数据卷）
-代理：通过 CLAWTEAM_ENV_FILE 传入 HTTP_PROXY、HTTPS_PROXY、NO_PROXY
+代理：通过 CLAWTEAM_ENV_FILE 传入 MIRROR_HTTP_PROXY 或 HTTP_PROXY、HTTPS_PROXY、NO_PROXY
 构建版本：CLAWTEAM_REF、CLAUDE_VERSION、MAGPIE_VERSION
 HELP
 }
@@ -46,18 +47,21 @@ case "$action" in
         if [[ -n ${CLAWTEAM_ENV_FILE:-} ]]; then
             options+=(--env-file "$CLAWTEAM_ENV_FILE")
         fi
-        providers_file=$(realpath -- "${CLAWTEAM_PROVIDERS_FILE:-$ROOT/providers.yaml}")
+        providers_file=$(realpath -- "${CLAWTEAM_PROVIDERS_FILE:-$ROOT/magpie-config/providers.yaml}")
         [[ -f $providers_file ]] || { echo 'providers.yaml 文件不存在。' >&2; exit 1; }
         options+=(--mount "type=bind,source=$providers_file,target=/etc/clawteam/providers.yaml,readonly")
-        skills_file=$(realpath -- "${CLAWTEAM_SKILLS_FILE:-$ROOT/skills.yaml}")
+        skills_file=$(realpath -- "${CLAWTEAM_SKILLS_FILE:-$ROOT/magpie-config/skills.yaml}")
         [[ -f $skills_file ]] || { echo 'skills.yaml 文件不存在。' >&2; exit 1; }
         options+=(--mount "type=bind,source=$skills_file,target=/etc/clawteam/skills.yaml,readonly")
-        if [[ -n ${CLAWTEAM_SYSTEM_PROMPT_FILE:-} ]]; then
-            prompt_file=$(realpath -- "$CLAWTEAM_SYSTEM_PROMPT_FILE")
-            [[ -f $prompt_file ]] || { echo '系统提示词文件不存在。' >&2; exit 1; }
-            options+=(--mount "type=bind,source=$prompt_file,target=/etc/clawteam/system-prompt.txt,readonly" \
-                -e CLAWTEAM_SYSTEM_PROMPT_FILE=/etc/clawteam/system-prompt.txt)
-        fi
+        prompt_file=$(realpath -- "${CLAWTEAM_PROMPT_FILE:-$ROOT/magpie-config/prompt.yaml}")
+        [[ -f $prompt_file ]] || { echo 'prompt.yaml 文件不存在。' >&2; exit 1; }
+        options+=(--mount "type=bind,source=$prompt_file,target=/etc/clawteam/prompt.yaml,readonly")
+        for config in mcp plugin; do
+            variable="CLAWTEAM_${config^^}_FILE"
+            config_file=$(realpath -- "${!variable:-$ROOT/magpie-config/$config.yaml}")
+            [[ -f $config_file ]] || { echo "$config.yaml 文件不存在。" >&2; exit 1; }
+            options+=(--mount "type=bind,source=$config_file,target=/etc/clawteam/$config.yaml,readonly")
+        done
         init_options=(--init)
         if [[ ${CLAWTEAM_DIND:-0} == 1 ]]; then
             init_options=(--init=false)
@@ -66,8 +70,8 @@ case "$action" in
                 --tmpfs /run --tmpfs /tmp:mode=1777 \
                 --mount "type=volume,source=${NAME}-docker,target=/var/lib/docker")
         fi
-        for var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAWTEAM_MODEL CLAWTEAM_WEB_URL CLAWTEAM_SYSTEM_PROMPT \
-            HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy ALL_PROXY all_proxy; do
+        for var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAWTEAM_MODEL CLAWTEAM_WEB_URL \
+            MIRROR_HTTP_PROXY HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy ALL_PROXY all_proxy; do
             if [[ -n ${!var:-} ]]; then options+=(-e "$var"); fi
         done
         docker run -d "${init_options[@]}" --name "$NAME" \

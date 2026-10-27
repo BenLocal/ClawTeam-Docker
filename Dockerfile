@@ -31,6 +31,8 @@ COPY subpath.js /etc/nginx/subpath.js
 COPY leader_runtime.py /usr/local/lib/clawteam-docker/leader_runtime.py
 COPY magpie_bootstrap.py /usr/local/lib/clawteam-docker/magpie_bootstrap.py
 COPY skills_bootstrap.py /usr/local/lib/clawteam-docker/skills_bootstrap.py
+COPY prompt_bootstrap.py /usr/local/lib/clawteam-docker/prompt_bootstrap.py
+COPY mcp_bootstrap.py plugin_bootstrap.py /usr/local/lib/clawteam-docker/
 COPY proxy_bootstrap.py /usr/local/lib/clawteam-docker/proxy_bootstrap.py
 COPY systemd_runtime.py /usr/local/lib/clawteam-docker/systemd_runtime.py
 COPY systemd/ /etc/systemd/system/
@@ -40,8 +42,7 @@ RUN systemctl enable docker.service clawteam.service clawteam-skills-update.time
     && truncate -s 0 /etc/machine-id \
     && rm -f /var/lib/dbus/machine-id \
     && ln -s /etc/machine-id /var/lib/dbus/machine-id
-COPY providers.yaml /etc/clawteam/providers.yaml
-COPY skills.yaml /etc/clawteam/skills.yaml
+COPY magpie-config/ /etc/clawteam/
 COPY --chmod=755 leader-session.sh /usr/local/bin/leader-session
 COPY --chmod=755 container-entrypoint.sh /usr/local/bin/container-entrypoint
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/clawteam-docker-entrypoint

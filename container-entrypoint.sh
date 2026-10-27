@@ -21,17 +21,6 @@ if [[ ! ${CLAWTEAM_LEADER_RESTART_DELAY:-10} =~ ^[1-9][0-9]*$ ]]; then
     echo 'CLAWTEAM_LEADER_RESTART_DELAY 必须是正整数秒数。' >&2
     exit 1
 fi
-additional_prompt=${CLAWTEAM_SYSTEM_PROMPT:-}
-if [[ -n ${CLAWTEAM_SYSTEM_PROMPT_FILE:-} ]]; then
-    if [[ ! -f $CLAWTEAM_SYSTEM_PROMPT_FILE || ! -r $CLAWTEAM_SYSTEM_PROMPT_FILE ]]; then
-        echo 'CLAWTEAM_SYSTEM_PROMPT_FILE 必须是容器用户可读的文本文件。' >&2
-        exit 1
-    fi
-    file_prompt=$(cat -- "$CLAWTEAM_SYSTEM_PROMPT_FILE")
-    if [[ -n $file_prompt ]]; then
-        additional_prompt+=$'\n'"$file_prompt"
-    fi
-fi
 # Apply the file on every start, including docker start on an existing container.
 CLAWTEAM_MODEL=$(python3 /usr/local/lib/clawteam-docker/magpie_bootstrap.py \
     "${CLAWTEAM_PROVIDERS_FILE:-/etc/clawteam/providers.yaml}")
@@ -67,8 +56,14 @@ for ((i=0; i<150; i++)); do
     sleep 0.2
 done
 if [[ $ready != true ]]; then echo 'Magpie 启动失败。' >&2; exit 1; fi
+python3 /usr/local/lib/clawteam-docker/plugin_bootstrap.py \
+    "${CLAWTEAM_PLUGIN_FILE:-/etc/clawteam/plugin.yaml}"
 python3 /usr/local/lib/clawteam-docker/skills_bootstrap.py \
     "${CLAWTEAM_SKILLS_FILE:-/etc/clawteam/skills.yaml}"
+python3 /usr/local/lib/clawteam-docker/mcp_bootstrap.py \
+    "${CLAWTEAM_MCP_FILE:-/etc/clawteam/mcp.yaml}"
+python3 /usr/local/lib/clawteam-docker/prompt_bootstrap.py \
+    "${CLAWTEAM_PROMPT_FILE:-/etc/clawteam/prompt.yaml}"
 clawteam board serve --host 127.0.0.1 --port 8081 &
 pids+=($!)
 nginx -c /etc/nginx/clawteam.conf -g 'daemon off;' &
@@ -88,9 +83,6 @@ read -r CLAWTEAM_AGENT_NAME CLAWTEAM_AGENT_ID <<< "$identity"
 export CLAWTEAM_AGENT_NAME CLAWTEAM_AGENT_ID
 export CLAWTEAM_AGENT_TYPE=leader CLAWTEAM_AGENT_LEADER=1 CLAWTEAM_WORKSPACE_DIR="$workspace"
 prompt="你是团队 $CLAWTEAM_TEAM_NAME 的 Leader，名字是 $CLAWTEAM_AGENT_NAME。团队已注册，直接使用它。请使用 clawteam skill 完成用户任务。使用 clawteam spawn tmux claude 创建 Worker；Leader 和所有 Worker 都必须在本容器运行。收到任务监听通知时，检查任务列表，主动接手未分配的 pending 任务，按需拆分、分配并汇总结果到任务描述。用户任务：${1:-等待面板中的任务。}"
-if [[ -n $additional_prompt ]]; then
-    prompt+=$'\n\n用户附加系统指令：\n'"$additional_prompt"
-fi
 leader_args=(leader-session claude \
     "${1:-检查团队任务列表，认领并执行 pending 任务；没有任务时等待任务通知。}" \
     --append-system-prompt "$prompt" --allowedTools 'Bash(clawteam *)')
