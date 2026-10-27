@@ -1,0 +1,20 @@
+[Unit]
+Description=ClawTeam agents and Web services
+Wants=docker.service
+After=docker.service
+SuccessAction=exit
+FailureAction=exit
+
+[Service]
+Type=exec
+User=node
+Group=node
+EnvironmentFile=/run/clawteam/agent.env
+ExecStart=/opt/venv/bin/python3 /usr/local/lib/clawteam-docker/systemd_runtime.py agent
+TimeoutStopSec=30
+KillMode=mixed
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

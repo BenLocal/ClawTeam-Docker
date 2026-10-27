@@ -47,15 +47,19 @@ case "$action" in
         providers_file=$(realpath -- "${CLAWTEAM_PROVIDERS_FILE:-$ROOT/providers.yaml}")
         [[ -f $providers_file ]] || { echo 'providers.yaml 文件不存在。' >&2; exit 1; }
         options+=(--mount "type=bind,source=$providers_file,target=/etc/clawteam/providers.yaml,readonly")
+        init_options=(--init)
         if [[ ${CLAWTEAM_DIND:-0} == 1 ]]; then
+            init_options=(--init=false)
             options+=(--privileged --user root -e CLAWTEAM_DIND=1 \
+                --cgroupns=private --stop-signal SIGRTMIN+3 --stop-timeout 60 \
+                --tmpfs /run --tmpfs /tmp:mode=1777 \
                 --mount "type=volume,source=${NAME}-docker,target=/var/lib/docker")
         fi
         for var in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAWTEAM_MODEL CLAWTEAM_WEB_URL \
             HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy ALL_PROXY all_proxy; do
             if [[ -n ${!var:-} ]]; then options+=(-e "$var"); fi
         done
-        docker run -d --init --name "$NAME" \
+        docker run -d "${init_options[@]}" --name "$NAME" \
             --restart unless-stopped \
             -p "${CLAWTEAM_WEB_BIND:-127.0.0.1}:${CLAWTEAM_WEB_PORT:-8080}:8080" \
             -e "CLAWTEAM_WEB_PORT=${CLAWTEAM_WEB_PORT:-8080}" \

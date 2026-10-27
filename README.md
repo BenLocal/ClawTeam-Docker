@@ -62,7 +62,7 @@ CLAWTEAM_DIND=1 CLAWTEAM_ENV_FILE=/path/to/agent.env \
 # 容器内可以执行 docker build、docker run、docker compose。
 ```
 
-启动脚本会添加 `--user root --privileged`，并把独立的 `<容器名>-docker` 数据卷挂到 `/var/lib/docker`。Docker daemon 以 root 运行，Leader 和 Worker 仍以 `node` 运行，通过容器内的 Unix socket 访问 daemon。停止或重建容器会保留内层镜像与数据卷。
+启动脚本会添加 `--user root --privileged --init=false`，并把独立的 `<容器名>-docker` 数据卷挂到 `/var/lib/docker`。DinD 模式下 systemd 作为 PID 1：`docker.service` 以 root 运行和守护 dockerd，`clawteam.service` 以 `node` 启动 Leader、Worker 和面板，通过容器内的 Unix socket 访问 Docker。停止或重建容器会保留内层镜像与数据卷。
 
 Compose 服务启用 DinD 时增加以下配置，并保留现有的项目、home 和 providers.yaml 挂载：
 
@@ -71,6 +71,13 @@ services:
   clawteam:
     user: root
     privileged: true
+    init: false
+    cgroup: private
+    stop_signal: SIGRTMIN+3
+    stop_grace_period: 60s
+    tmpfs:
+      - /run
+      - /tmp:mode=1777
     environment:
       CLAWTEAM_DIND: "1"
     volumes:
@@ -85,7 +92,16 @@ volumes:
 
 Docker 环境变量在创建容器时确定。修改 env-file 后，用 `docker compose up -d --force-recreate` 重建服务；`docker start` 或 `docker restart` 会继续使用原来的环境变量。providers.yaml 的内容则在每次启动时重新读取。
 
-直接用 `docker exec` 操作 DinD 容器时，用 `--user node` 进入 Agent 环境，例如 `docker exec --user node -it clawteam bash`。Docker daemon 的启动日志位于容器内 `/var/log/clawteam-dockerd.log`，由 root 读取。
+直接用 `docker exec` 操作 DinD 容器时，用 `--user node` 进入 Agent 环境，例如 `docker exec --user node -it clawteam bash`。服务状态、重启和日志通过 systemd 管理：
+
+```bash
+docker exec --user root clawteam systemctl status docker
+docker exec --user root clawteam systemctl restart docker
+docker exec --user root clawteam journalctl -u docker --no-pager -n 100
+docker exec --user root clawteam systemctl status clawteam
+```
+
+Docker daemon 异常退出后由 systemd 重启；重启 Docker 服务会暂时中断内层 Docker 操作，ClawTeam 服务保持运行。应用进程退出时，systemd 会正常关闭容器并把应用退出状态返回给 Docker。未启用 DinD 的启动方式仍使用轻量入口，不启动 systemd。
 
 ## Claude Code 自动切换模型
 

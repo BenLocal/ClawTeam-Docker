@@ -48,6 +48,13 @@ jobs:
         env:
           CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}
         run: python3 tests/dind_smoke.py
+      - name: Verify systemd service units
+        run: docker run --rm --user root --entrypoint systemd-analyze "${TEST_IMAGE}" verify /etc/systemd/system/docker.service /etc/systemd/system/clawteam.service
+      - name: Verify ClawTeam with systemd and Docker
+        env:
+          CLAWTEAM_IMAGE: ${{ env.TEST_IMAGE }}
+          CLAWTEAM_DIND: "1"
+        run: python3 tests/smoke.py
       - name: Verify dashboard task wakeups
         run: docker run --rm -i "${TEST_IMAGE}" python3 - < tests/test_leader_watcher.py
 

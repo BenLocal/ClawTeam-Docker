@@ -15,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = f"clawteam-smoke-{os.getpid()}"
+DIND = os.environ.get("CLAWTEAM_DIND") == "1"
 FAKE_CLAUDE = """\
 #!/usr/bin/env python3
 import json, os, sys, time
@@ -64,7 +65,7 @@ def run(*args, env=None):
 
 
 def inside(*args):
-    return run("docker", "exec", NAME, *args)
+    return run("docker", "exec", "--user", "node", NAME, *args)
 
 
 def wait_for(check, message):
@@ -300,11 +301,30 @@ try:
         )
         # Recreate on the same home volume to verify credentials, groups and model selection persist.
         run(str(ROOT / "clawteam.sh"), "stop", env=env)
+        init_options = ["--init"]
+        if DIND:
+            init_options = [
+                "--init=false",
+                "--privileged",
+                "--user",
+                "root",
+                "--cgroupns=private",
+                "--stop-signal",
+                "SIGRTMIN+3",
+                "--tmpfs",
+                "/run",
+                "--tmpfs",
+                "/tmp:mode=1777",
+                "-e",
+                "CLAWTEAM_DIND=1",
+                "--mount",
+                f"type=volume,source={NAME}-docker,target=/var/lib/docker",
+            ]
         run(
             "docker",
             "run",
             "-d",
-            "--init",
+            *init_options,
             "--name",
             NAME,
             "-p",
@@ -394,3 +414,10 @@ finally:
         stderr=subprocess.DEVNULL,
         check=False,
     )
+    if DIND:
+        subprocess.run(
+            ["docker", "volume", "rm", f"{NAME}-docker"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
