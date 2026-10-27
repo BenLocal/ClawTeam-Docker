@@ -309,6 +309,10 @@ CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> \
 
 容器集成验证：构建后运行 `python3 tests/smoke.py`。测试使用临时项目、容器和数据卷，验证同一端口的两个面板、登录、SSE、模型路由及持久化，并用模拟供应商检查 `429 → 备用模型`，不需要真实模型凭据。另运行 `python3 tests/dind_smoke.py`，使用临时 privileged 容器验证内层构建、运行、代理和 Docker 数据卷持久化。
 
+## Vikunja 评论接单
+
+可选的 [Vikunja 桥接](integrations/vikunja/README.md) 按 YAML 中的项目映射，将新评论 `/clawteam run` 对应的任务交给团队 Leader。桥接包含签名校验、持久队列和重复投递去重，独立部署在宿主机。需要用户决定时，可将 [决策沟通规则](integrations/vikunja/decision-policy.md) 加入团队提示词。
+
 ## GitHub CI 与镜像发布
 
 工作流位于 `.github/workflows/docker-release.yml`，镜像发布到 `ghcr.io/benlocal/clawteam-docker`，名称自动转换为小写。使用 GitHub 自带的 `GITHUB_TOKEN`，无需额外配置 Docker Hub 或个人令牌。

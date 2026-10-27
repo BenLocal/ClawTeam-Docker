@@ -1,0 +1,16 @@
+[Unit]
+Description=Vikunja webhook intake for ClawTeam leaders
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/clawteam-vikunja
+ExecStart=/opt/clawteam-vikunja/.venv/bin/python3 /opt/clawteam-vikunja/bridge.py /etc/clawteam-vikunja/config.yaml
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

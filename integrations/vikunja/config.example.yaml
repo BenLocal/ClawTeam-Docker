@@ -1,0 +1,27 @@
+vikunja_url: https://tasks.example.com
+listen_host: 127.0.0.1
+listen_port: 28089
+secret_file: /etc/clawteam-vikunja/webhook.secret
+queue_db: /var/lib/clawteam-vikunja/queue.sqlite3
+dispatch_command:
+  - docker
+  - exec
+  - -i
+  - -u
+  - node
+  - clawteam
+  - /opt/venv/bin/python3
+  - /home/node/.local/lib/vikunja-bridge/dispatch.py
+
+# Only a newly posted comment whose entire text matches this command triggers.
+trigger:
+  command: /clawteam run
+
+# Example (replace 123 with a real Vikunja project ID):
+# projects:
+#   123:
+#     team: courselab
+#     leader: leader
+#     enabled: true
+#     label: clawteam  # Optional; omit to allow tasks without this label.
+projects: {}

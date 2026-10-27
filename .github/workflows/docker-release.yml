@@ -42,6 +42,8 @@ jobs:
         run: python3 tests/smoke.py
       - name: Validate startup configuration
         run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_magpie_bootstrap.py -v
+      - name: Validate Vikunja comment intake
+        run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_vikunja_bridge.py -v
       - name: Validate Docker proxy configuration
         run: docker run --rm -v "$PWD:/source:ro" "${TEST_IMAGE}" python3 -B -m unittest discover -s /source/tests -p test_proxy_bootstrap.py -v
       - name: Validate skill imports
