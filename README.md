@@ -1,6 +1,6 @@
 # ClawTeam Docker
 
-ClawTeam、tmux、Git、Python、Node.js、Claude Code、Magpie、Nginx 和 Docker 工具打包在同一个容器里。宿主机仅需 Docker 和 Bash。Leader 在容器内的 tmux `clawteam:leader` 窗口运行，通过 ClawTeam 创建的 Worker 也在同一容器中运行，各自拥有 Git worktree 和 tmux 窗口。
+ClawTeam、tmux、Git、Python、Node.js、Claude Code、DeepSeek Harness（dsh 与 dsh-tui）、Magpie、Nginx 和 Docker 工具打包在同一个容器里。宿主机仅需 Docker 和 Bash。Leader 在容器内的 tmux `clawteam:leader` 窗口运行，通过 ClawTeam 创建的 Worker 也在同一容器中运行，各自拥有 Git worktree 和 tmux 窗口。
 
 ```bash
 ./clawteam.sh build
@@ -314,12 +314,14 @@ CLAWTEAM_MODEL=group/coding ./clawteam.sh start /项目目录 "继续任务"
 
 ```bash
 CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本> BUN_VERSION=<版本> \
-  MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
+  DSH_VERSION=<npm版本> DSH_TUI_VERSION=<npm版本> MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
 ```
 
 镜像设置 `DISABLE_AUTOUPDATER=1`，关闭 Claude Code 在容器内的自动更新；工具版本随镜像构建固定，升级时重新构建镜像。
 
 镜像预装 Bun（`BUN_VERSION`，默认 1.4.2，按发布包的 SHA256 校验），并设置 `MAGPIE_BUN=/usr/local/bin/bun`，Magpie 运行插件时不再从 GitHub 下载 Bun。
+
+镜像预装 DeepSeek Harness（`DSH_VERSION`，默认 0.2.1-rc.2）和 dsh-tui 插件（`DSH_TUI_VERSION`，默认 0.17.0）。dsh-tui 只接受它声明的 dsh 版本，两者要一起升级。TUI profile 在构建时生成于 `/opt/dsh/profiles/tui`，首次启动时复制到 home 卷的 `~/.dsh/profiles/tui`；之后的插件变更和 Magpie 写入的模型配置都留在卷里。已有的 profile 不会随镜像升级替换，需要换成新镜像的版本时，删除该目录再重启容器。启动时选定 Magpie 模型后，dsh 的所有 profile 使用同一个模型。Worker 可用 `clawteam spawn tmux dsh tui --team ...` 创建，需要 `CLAWTEAM_REF` 指向包含 dsh 适配的 ClawTeam 版本。
 
 安装与编排方式参考 [ClawTeam 官方仓库](https://github.com/HKUDS/ClawTeam)、[Claude Code 官方仓库](https://github.com/anthropics/claude-code) 和 [Magpie 官方说明](https://github.com/yetone/magpie)。
 

@@ -16,6 +16,16 @@ RUN git clone https://github.com/BenLocal/ClawTeam.git /opt/clawteam \
     && npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
         "@openai/codex@${CODEX_VERSION}"
 RUN /opt/venv/bin/pip install --no-cache-dir 'PyYAML>=6,<7'
+# dsh-tui accepts only the dsh releases it names, so both stay pinned. Its
+# profile is built here and seeded into the home volume on first start.
+ARG DSH_VERSION=0.2.1-rc.2
+ARG DSH_TUI_VERSION=0.17.0
+ARG PNPM_VERSION=12.15.0
+RUN npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" "pnpm@${PNPM_VERSION}" \
+    && DSH_HOME=/opt/dsh dsh plugin --profile tui add \
+        "@deepseek-harness-tui/dsh-tui@${DSH_TUI_VERSION}" \
+    && rm -rf /opt/dsh/profiles/tui/.plugin-manager /root/.local/share/pnpm /root/.cache \
+    && chmod -R a+rX /opt/dsh
 ARG BUN_VERSION=1.4.2
 ARG TARGETARCH
 # Magpie runs plugins on Bun and otherwise downloads it from GitHub at runtime.

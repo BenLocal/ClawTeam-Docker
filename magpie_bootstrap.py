@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -194,6 +195,9 @@ def configure(path):
         magpie("claude", model)
         if "effort" in claude:
             magpie("claude", "effort", claude["effort"])
+        if shutil.which("dsh"):
+            # dsh Workers share the Leader's model; Magpie writes every dsh profile.
+            magpie("dsh", model)
         # An explicitly mounted Git workspace can start on a configured API model
         # without the first-run subscription sign-in or workspace trust screens.
         state_path = Path.home() / ".claude.json"

@@ -1,7 +1,7 @@
 # 系统架构
 > 启动入口、服务边界与 Magpie 配置导入顺序；改服务生命周期前阅读。
 
-本仓库负责打包与部署 ClawTeam，不包含后端业务项目源码。Dockerfile 获取 ClawTeam fork、Magpie、Claude Code 和 Docker CLI/daemon，运行时状态保存在 home 卷和 Docker 数据卷。
+本仓库负责打包与部署 ClawTeam，不包含后端业务项目源码。Dockerfile 获取 ClawTeam fork、Magpie、Claude Code、dsh 与 dsh-tui 和 Docker CLI/daemon，运行时状态保存在 home 卷和 Docker 数据卷。
 
 `docker-entrypoint.sh` 生成 Docker 客户端配置，按是否启用 DinD 选择轻量入口或 systemd。systemd 环境快照由 `systemd_runtime.py` 写入 `/run/clawteam`；Agent 环境与 dockerd 代理环境分开保存。
 

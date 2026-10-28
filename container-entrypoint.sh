@@ -2,6 +2,13 @@
 set -euo pipefail
 mkdir -p "$HOME/.claude/skills" "$HOME/.clawteam"
 ln -sfn /opt/clawteam/skills/clawteam "$HOME/.claude/skills/clawteam"
+# Seed dsh's TUI profile once; later plugin changes and Magpie patches stay in the volume.
+if [[ -d /opt/dsh/profiles/tui && ! -e $HOME/.dsh/profiles/tui ]]; then
+    mkdir -p "$HOME/.dsh/profiles"
+    seed=$(mktemp -d "$HOME/.dsh/profiles/.tui-seed.XXXXXX")
+    cp -R /opt/dsh/profiles/tui/. "$seed"
+    mv "$seed" "$HOME/.dsh/profiles/tui"
+fi
 # Keep credentials and CLI state in the persistent home volume.
 if [[ ${1:-} != start ]]; then
     exec "$@"

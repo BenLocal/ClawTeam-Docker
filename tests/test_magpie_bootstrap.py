@@ -56,6 +56,7 @@ class BootstrapTests(unittest.TestCase):
                 ),
                 patch.object(bootstrap, "magpie") as cli,
                 patch.object(bootstrap, "PENDING_PATH", home / "pending"),
+                patch.object(bootstrap.shutil, "which", return_value=None),
             ):
                 bootstrap.configure(config)
             calls = cli.call_args_list
@@ -67,6 +68,32 @@ class BootstrapTests(unittest.TestCase):
             self.assertEqual(state["unrelated"], "keep")
             self.assertTrue(state["hasCompletedOnboarding"])
             self.assertTrue(state["projects"][os.getcwd()]["hasTrustDialogAccepted"])
+
+    def test_installed_dsh_follows_the_claude_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            config = home / "providers.yaml"
+            config.write_text(json.dumps(self.config()))
+            for installed, expected in (("/usr/local/bin/dsh", True), (None, False)):
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "HOME": directory,
+                            "XDG_CONFIG_HOME": str(home / ".config"),
+                            "TEST_BASE": "http://gateway:8000/v1",
+                            "TEST_KEY": "secret",
+                            "CLAWTEAM_MODEL": "relay/test-model",
+                        },
+                    ),
+                    patch.object(bootstrap, "magpie") as cli,
+                    patch.object(bootstrap, "PENDING_PATH", home / "pending"),
+                    patch.object(bootstrap.shutil, "which", return_value=installed),
+                ):
+                    bootstrap.configure(config)
+                calls = [call.args for call in cli.call_args_list]
+                self.assertIn(("claude", "relay/test-model"), calls)
+                self.assertEqual(("dsh", "relay/test-model") in calls, expected)
 
     def test_required_empty_key_waits_and_filled_key_resumes(self):
         with tempfile.TemporaryDirectory() as directory:
