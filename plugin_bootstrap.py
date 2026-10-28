@@ -27,9 +27,11 @@ def read_plugins(path):
 
 
 def configure(path):
+    """Install listed plugins; return the 1-based indexes that failed to install."""
     plugins = read_plugins(path)
+    failed = []
     if not plugins:
-        return
+        return failed
     config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     profile = config / "magpie/plugins.json"
     state_file = config / "clawteam-docker/plugin-sources.json"
@@ -49,18 +51,28 @@ def configure(path):
         if state.get(source) in specs:
             print(f"plugin: 第 {index} 个插件已安装，保留原配置。", flush=True)
             continue
-        result = subprocess.run(
-            ["magpie", "plugin", "add", source],
-            capture_output=True,
-            text=True,
-            timeout=360,
-            check=False,
-            env=download_environment(),
-        )
-        if result.returncode:
-            raise RuntimeError(
-                f"第 {index} 个插件安装失败，请检查来源、Git 凭据及网络。"
+        try:
+            result = subprocess.run(
+                ["magpie", "plugin", "add", source],
+                capture_output=True,
+                text=True,
+                timeout=360,
+                check=False,
+                env=download_environment(),
             )
+        except subprocess.TimeoutExpired:
+            result = None
+        if result is None or result.returncode:
+            # A plugin is optional for the team: skip it, keep it unrecorded so
+            # the next start retries, and never echo output that may hold credentials.
+            print(
+                f"plugin: 第 {index} 个插件安装失败，已跳过，下次启动重试；"
+                "请检查来源、Git 凭据及网络。",
+                file=sys.stderr,
+                flush=True,
+            )
+            failed.append(index)
+            continue
         # Magpie resolves community aliases to the spec printed by its add command.
         resolved = next(
             (
@@ -78,6 +90,7 @@ def configure(path):
             temporary.chmod(0o600)
             temporary.replace(state_file)
         print(f"plugin: 已安装第 {index} 个插件。", flush=True)
+    return failed
 
 
 if __name__ == "__main__":
@@ -87,8 +100,6 @@ if __name__ == "__main__":
         OSError,
         ValueError,
         TypeError,
-        RuntimeError,
-        subprocess.TimeoutExpired,
         yaml.YAMLError,
     ) as error:
         print(f"插件启动配置失败：{error}", file=sys.stderr)

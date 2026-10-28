@@ -11,7 +11,7 @@
 - 单元测试：`docker run --rm -v "$PWD:/source:ro" clawteam-local:latest python3 -B -m unittest discover -s /source/tests -p 'test_*.py' -v`。
 - 集成测试：`CLAWTEAM_IMAGE=clawteam-local:latest python3 tests/smoke.py`；设置 `CLAWTEAM_DIND=1` 再验证 systemd 路径。
 - 内层 Docker：`CLAWTEAM_IMAGE=clawteam-local:latest python3 tests/dind_smoke.py`，需要允许 privileged 容器。
-- 原生插件：`CLAWTEAM_IMAGE=clawteam-local:latest python3 tests/plugin_smoke.py`，包含实际 Bun 下载；测试代理使用调用环境的 `MIRROR_HTTP_PROXY`。
+- 原生插件：`CLAWTEAM_IMAGE=clawteam-local:latest python3 tests/plugin_smoke.py`，使用镜像预装的 Bun 离线安装本地插件，并验证安装失败的条目被跳过且不记录成功。
 
 CI 定义在 `.github/workflows/docker-release.yml`。只跑与改动相关的检查；服务边界、启动顺序或代理改动需要相应运行时验证，不能只用语法检查代替。
 

@@ -1,4 +1,4 @@
-"""Verify native plugin installs, download retries and preserved manual settings."""
+"""Verify native plugin installs, skipped failures and preserved manual settings."""
 
 import os
 import subprocess
@@ -19,15 +19,13 @@ assert "127.0.0.1" in docker_proxy["noProxy"]
 with tempfile.TemporaryDirectory() as directory:
     source = Path(directory, "fixture-plugin.js")
     source.write_text("export default async () => ({});\n")
+    missing = Path(directory, "missing-plugin.js")
     config = Path(directory, "plugin.yaml")
-    config.write_text(json.dumps({"plugins": [str(source)]}))
-    try:
-        configure(config)
-    except RuntimeError:
-        pass
-    else:
-        raise AssertionError("offline Bun download unexpectedly succeeded")
-    assert not Path.home().joinpath(".config/clawteam-docker/plugin-sources.json").exists()
+    config.write_text(json.dumps({"plugins": [str(missing), str(source)]}))
+    # The preinstalled Bun runs a local plugin without network; a failed entry is skipped.
+    assert configure(config) == [1]
+    state_file = Path.home() / ".config/clawteam-docker/plugin-sources.json"
+    assert json.loads(state_file.read_text()) == {str(source): str(source)}
     profile = Path.home() / ".config/magpie/plugins.json"
     saved = json.loads(profile.read_text())
     assert len(saved["plugins"]) == 1, saved
@@ -36,16 +34,10 @@ with tempfile.TemporaryDirectory() as directory:
     saved["plugins"][0]["options"] = {"keep": "manual"}
     saved["plugins"].append({"spec": "/manual-plugin.js", "off": True})
     profile.write_text(json.dumps(saved))
-    # Retry with working networking after the deliberately failed proxy.
-    proxy = os.environ.get("PLUGIN_TEST_PROXY", "")
-    os.environ["MIRROR_HTTP_PROXY"] = proxy
-    for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
-        os.environ.pop(key, None)
-    if proxy:
-        os.environ.update(HTTP_PROXY=proxy, HTTPS_PROXY=proxy, http_proxy=proxy, https_proxy=proxy)
-    configure(config)
+    # The failed entry stays unrecorded and is retried; installed ones keep manual settings.
+    assert configure(config) == [1]
     assert json.loads(profile.read_text()) == saved
-    configure(config)
+    assert configure(config) == [1]
     assert json.loads(profile.read_text()) == saved
     config.write_text("plugins: []\n")
     configure(config)
@@ -58,7 +50,7 @@ with tempfile.TemporaryDirectory() as directory:
     else:
         raise AssertionError("non-string plugin spec accepted")
 print("PASS: native plugin registration is idempotent and preserves manual plugins/options/off state")
-print("PASS: failed installation is retried rather than marked successful")
+print("PASS: failed installation is skipped, retried and never marked successful")
 print("PASS: Docker/download proxy scope preserves the application's proxy environment")
 """
 
@@ -76,8 +68,6 @@ subprocess.run(
         "HTTP_PROXY=http://old-proxy:3128",
         "-e",
         "NO_PROXY=repo.internal",
-        "-e",
-        "PLUGIN_TEST_PROXY=" + os.environ.get("MIRROR_HTTP_PROXY", ""),
         os.environ.get("CLAWTEAM_IMAGE", "clawteam-local:latest"),
         "python3",
         "-B",
