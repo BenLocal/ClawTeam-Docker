@@ -16,13 +16,31 @@ RUN git clone https://github.com/BenLocal/ClawTeam.git /opt/clawteam \
     && npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
         "@openai/codex@${CODEX_VERSION}"
 RUN /opt/venv/bin/pip install --no-cache-dir 'PyYAML>=6,<7'
+ARG BUN_VERSION=1.4.2
+ARG TARGETARCH
+# Magpie runs plugins on Bun and otherwise downloads it from GitHub at runtime.
+RUN case "${TARGETARCH:-amd64}" in \
+        amd64) bun_target=linux-x64-baseline ;; \
+        arm64) bun_target=linux-aarch64 ;; \
+        *) echo "unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && bun_base="https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}" \
+    && curl -fsSL -o /tmp/bun.zip "$bun_base/bun-$bun_target.zip" \
+    && curl -fsSL "$bun_base/SHASUMS256.txt" \
+        | awk -v f="bun-$bun_target.zip" '$2 == f { print $1 "  /tmp/bun.zip" }' \
+        | grep . | sha256sum -c - \
+    && python3 -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile("/tmp/bun.zip").read(sys.argv[1]))' \
+        "bun-$bun_target/bun" > /usr/local/bin/bun \
+    && chmod 755 /usr/local/bin/bun \
+    && rm /tmp/bun.zip \
+    && bun --version
 RUN apt-get update && apt-get install -y --no-install-recommends \
     iptables iproute2 util-linux xz-utils systemd systemd-sysv dbus procps \
     && rm -rf /var/lib/apt/lists/*
 ENV PATH="/opt/venv/bin:${PATH}" HOME=/home/node TERM=xterm-256color \
     CLAWTEAM_DEFAULT_BACKEND=tmux CLAWTEAM_TRANSPORT=file MAGPIE_ADDR=127.0.0.1:3425 \
     CLAWTEAM_PROVIDERS_FILE=/etc/clawteam/providers.yaml \
-    DISABLE_AUTOUPDATER=1
+    DISABLE_AUTOUPDATER=1 MAGPIE_BUN=/usr/local/bin/bun
 COPY --from=magpie /magpie /usr/local/bin/magpie
 COPY --from=docker /usr/local/bin/docker /usr/local/bin/dockerd \
     /usr/local/bin/docker-init /usr/local/bin/docker-proxy \

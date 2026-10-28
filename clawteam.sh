@@ -34,6 +34,7 @@ case "$action" in
         docker build --build-arg "CLAWTEAM_REF=${CLAWTEAM_REF:-self}" \
             --build-arg "CLAUDE_VERSION=${CLAUDE_VERSION:-latest}" \
             --build-arg "CODEX_VERSION=${CODEX_VERSION:-latest}" \
+            --build-arg "BUN_VERSION=${BUN_VERSION:-1.4.2}" \
             --build-arg "MAGPIE_VERSION=${MAGPIE_VERSION:-latest}" -t "$IMAGE" "$ROOT"
         ;;
     start)

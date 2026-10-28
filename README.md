@@ -257,7 +257,19 @@ plugins:
   - /workspace/my-plugin.js
 ```
 
-支持 Magpie 原生的社区名称、npm 包、Git 来源和容器内路径。已有插件保留启用状态与选项，不重复添加；修改来源或版本后在下次启动安装。删除列表条目不会卸载插件。安装依赖、Bun 下载和插件登录沿用 Magpie 原生行为；需要账号的插件仍需完成登录。默认 `plugins: []` 不安装插件。
+支持 Magpie 原生的社区名称、npm 包、Git 来源和容器内路径。已有插件保留启用状态与选项，不重复添加；修改来源或版本后在下次启动安装。删除列表条目不会卸载插件。安装依赖和插件登录沿用 Magpie 原生行为，插件运行使用镜像预装的 Bun；需要账号的插件仍需完成登录。默认 `plugins: []` 不安装插件。
+
+`tools` 类插件（例如社区插件 `LayerFS`）的工具由 Magpie 网关的 `/mcp/magpie/tools` 提供，名为 `<插件>_<工具>`。在 `mcp.yaml` 中声明后同步给 Agent：
+
+```yaml
+servers:
+  - name: magpie-tools
+    transport: http
+    url: http://127.0.0.1:3425/mcp/magpie/tools
+    agents: [claude, codex]
+```
+
+网关只监听容器内 `127.0.0.1:3425`，Nginx 不转发该路径。插件工具以容器用户 `node` 的权限运行，启用会执行命令的工具前先确认其选项。
 
 启动脚本默认挂载这两个文件，也可通过宿主机环境变量 `CLAWTEAM_MCP_FILE`、`CLAWTEAM_PLUGIN_FILE` 指定文件。Docker/Compose 分别挂载到 `/etc/clawteam/mcp.yaml`、`/etc/clawteam/plugin.yaml`。这些配置在 Magpie 就绪后、Leader 启动前导入，修改后重启容器生效。
 
@@ -301,11 +313,13 @@ CLAWTEAM_MODEL=group/coding ./clawteam.sh start /项目目录 "继续任务"
 默认镜像名为 `clawteam-local:latest`，容器名为 `clawteam`，可用 `CLAWTEAM_IMAGE`、`CLAWTEAM_CONTAINER` 覆盖。ClawTeam 源码默认使用 [BenLocal/ClawTeam 的 self 分支](https://github.com/BenLocal/ClawTeam/tree/self)；可通过 `CLAWTEAM_REF` 指定该 fork 中的其他分支、tag 或 commit 重建：
 
 ```bash
-CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本> \
+CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本> BUN_VERSION=<版本> \
   MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
 ```
 
 镜像设置 `DISABLE_AUTOUPDATER=1`，关闭 Claude Code 在容器内的自动更新；工具版本随镜像构建固定，升级时重新构建镜像。
+
+镜像预装 Bun（`BUN_VERSION`，默认 1.4.2，按发布包的 SHA256 校验），并设置 `MAGPIE_BUN=/usr/local/bin/bun`，Magpie 运行插件时不再从 GitHub 下载 Bun。
 
 安装与编排方式参考 [ClawTeam 官方仓库](https://github.com/HKUDS/ClawTeam)、[Claude Code 官方仓库](https://github.com/anthropics/claude-code) 和 [Magpie 官方说明](https://github.com/yetone/magpie)。
 
