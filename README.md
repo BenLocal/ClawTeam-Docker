@@ -342,3 +342,7 @@ CLAWTEAM_IMAGE=ghcr.io/benlocal/clawteam-docker:1.0.0 \
 ```
 
 工作流参考 [Docker 官方多架构构建说明](https://docs.docker.com/build/ci/github-actions/multi-platform/) 和 [GitHub 官方镜像发布说明](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)。
+
+## 远程 HTTP skill
+
+[skills/clawteam](skills/clawteam/SKILL.md) 是纯 HTTP 客户端，全部操作经 `/clawteam/openapi/` 调用：派发和更新任务、发送消息、启动 Agent、查询快照及监听进度。它不依赖 ah 或 SSH。服务端在 `agent.env` 设置 `CLAWTEAM_BOARD_API_KEY` 后才开放该接口，客户端用同一 Key 作 Bearer 认证。修改 env-file 后需重建容器。

@@ -37,7 +37,7 @@
 
 ## 📇 项目 Skill 索引（全仓 SKILL.md，脚本生成）
 <!-- SKILLS:START -->
-- （仓库内暂无 SKILL.md）
+- **clawteam** — 通过 ClawTeam OpenAPI 创建和更新任务、发送消息、启动 Agent、查询运行状态、等待任务结果和监听进度 （`skills/clawteam`）
 <!-- SKILLS:END -->
 
 ## 📂 模块文档索引（docs/agents-dot-md/，脚本生成）
