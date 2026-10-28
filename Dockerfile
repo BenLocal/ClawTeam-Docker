@@ -21,7 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 ENV PATH="/opt/venv/bin:${PATH}" HOME=/home/node TERM=xterm-256color \
     CLAWTEAM_DEFAULT_BACKEND=tmux CLAWTEAM_TRANSPORT=file MAGPIE_ADDR=127.0.0.1:3425 \
-    CLAWTEAM_PROVIDERS_FILE=/etc/clawteam/providers.yaml
+    CLAWTEAM_PROVIDERS_FILE=/etc/clawteam/providers.yaml \
+    DISABLE_AUTOUPDATER=1
 COPY --from=magpie /magpie /usr/local/bin/magpie
 COPY --from=docker /usr/local/bin/docker /usr/local/bin/dockerd \
     /usr/local/bin/docker-init /usr/local/bin/docker-proxy \

@@ -305,6 +305,8 @@ CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本>
   MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
 ```
 
+镜像设置 `DISABLE_AUTOUPDATER=1`，关闭 Claude Code 在容器内的自动更新；工具版本随镜像构建固定，升级时重新构建镜像。
+
 安装与编排方式参考 [ClawTeam 官方仓库](https://github.com/HKUDS/ClawTeam)、[Claude Code 官方仓库](https://github.com/anthropics/claude-code) 和 [Magpie 官方说明](https://github.com/yetone/magpie)。
 
 容器集成验证：构建后运行 `python3 tests/smoke.py`。测试使用临时项目、容器和数据卷，验证同一端口的两个面板、登录、SSE、模型路由及持久化，并用模拟供应商检查 `429 → 备用模型`，不需要真实模型凭据。另运行 `python3 tests/dind_smoke.py`，使用临时 privileged 容器验证内层构建、运行、代理和 Docker 数据卷持久化。
