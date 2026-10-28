@@ -16,6 +16,14 @@ RUN git clone https://github.com/BenLocal/ClawTeam.git /opt/clawteam \
     && npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
         "@openai/codex@${CODEX_VERSION}"
 RUN /opt/venv/bin/pip install --no-cache-dir 'PyYAML>=6,<7'
+# Python Playwright with Chromium (full browser and headless shell) for browser
+# testing skills; browsers live in the image so every agent can launch them.
+ARG PLAYWRIGHT_VERSION=1.64.1
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN /opt/venv/bin/pip install --no-cache-dir "playwright==${PLAYWRIGHT_VERSION}" \
+    && /opt/venv/bin/playwright install --with-deps chromium \
+    && rm -rf /var/lib/apt/lists/* \
+    && chmod -R a+rX "$PLAYWRIGHT_BROWSERS_PATH"
 # dsh-tui accepts only the dsh releases it names, so both stay pinned. Its
 # profile is built here and seeded into the home volume on first start.
 ARG DSH_VERSION=0.2.1-rc.2

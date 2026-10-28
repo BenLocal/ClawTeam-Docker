@@ -1,7 +1,7 @@
 # 技术栈与验证
 > 本仓库的运行依赖和验证入口；构建与修改代码前阅读。
 
-基础镜像为 Node.js 22，提供 npm；dsh 用 npm 安装，dsh-tui 由 dsh 调用 pnpm 装进 TUI profile；Python 在 `/opt/venv`，YAML 解析使用 PyYAML。Bash 负责进程入口，Python 负责配置校验与运行状态，Nginx 提供子路径访问。版本参数以 Dockerfile 和 `clawteam.sh` 为准。
+基础镜像为 Node.js 22，提供 npm；dsh 用 npm 安装，dsh-tui 由 dsh 调用 pnpm 装进 TUI profile；Python 在 `/opt/venv`，YAML 解析使用 PyYAML，浏览器测试使用 Python Playwright 与预装 Chromium（`/opt/ms-playwright`）。Bash 负责进程入口，Python 负责配置校验与运行状态，Nginx 提供子路径访问。版本参数以 Dockerfile 和 `clawteam.sh` 为准。
 
 ## 验证命令
 

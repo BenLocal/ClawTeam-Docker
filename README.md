@@ -314,12 +314,14 @@ CLAWTEAM_MODEL=group/coding ./clawteam.sh start /项目目录 "继续任务"
 
 ```bash
 CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本> BUN_VERSION=<版本> \
-  DSH_VERSION=<npm版本> DSH_TUI_VERSION=<npm版本> MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
+  DSH_VERSION=<npm版本> DSH_TUI_VERSION=<npm版本> PLAYWRIGHT_VERSION=<pip版本> MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
 ```
 
 镜像设置 `DISABLE_AUTOUPDATER=1`，关闭 Claude Code 在容器内的自动更新；工具版本随镜像构建固定，升级时重新构建镜像。
 
 镜像预装 Bun（`BUN_VERSION`，默认 1.4.2，按发布包的 SHA256 校验），并设置 `MAGPIE_BUN=/usr/local/bin/bun`，Magpie 运行插件时不再从 GitHub 下载 Bun。
+
+镜像预装 Python Playwright（`PLAYWRIGHT_VERSION`，默认 1.64.1，装在 `/opt/venv`）和 Chromium（完整浏览器及无头 shell，位于 `PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright`），Agent 可直接用 `webapp-testing` 等 skill 做浏览器测试，无需运行时下载浏览器。
 
 镜像预装 DeepSeek Harness（`DSH_VERSION`，默认 0.2.1-rc.2）和 dsh-tui 插件（`DSH_TUI_VERSION`，默认 0.17.0）。dsh-tui 只接受它声明的 dsh 版本，两者要一起升级。TUI profile 在构建时生成于 `/opt/dsh/profiles/tui`，首次启动时复制到 home 卷的 `~/.dsh/profiles/tui`；之后的插件变更和 Magpie 写入的模型配置都留在卷里。已有的 profile 不会随镜像升级替换，需要换成新镜像的版本时，删除该目录再重启容器。启动时选定 Magpie 模型后，dsh 的所有 profile 使用同一个模型。Worker 可用 `clawteam spawn tmux dsh tui --team ...` 创建，需要 `CLAWTEAM_REF` 指向包含 dsh 适配的 ClawTeam 版本。
 
