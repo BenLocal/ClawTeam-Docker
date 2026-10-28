@@ -301,7 +301,7 @@ CLAWTEAM_MODEL=group/coding ./clawteam.sh start /项目目录 "继续任务"
 默认镜像名为 `clawteam-local:latest`，容器名为 `clawteam`，可用 `CLAWTEAM_IMAGE`、`CLAWTEAM_CONTAINER` 覆盖。ClawTeam 源码默认使用 [BenLocal/ClawTeam 的 self 分支](https://github.com/BenLocal/ClawTeam/tree/self)；可通过 `CLAWTEAM_REF` 指定该 fork 中的其他分支、tag 或 commit 重建：
 
 ```bash
-CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> \
+CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本> \
   MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
 ```
 

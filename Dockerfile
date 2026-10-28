@@ -5,6 +5,7 @@ FROM docker:${DOCKER_VERSION}-dind AS docker
 FROM node:22-bookworm-slim
 ARG CLAWTEAM_REF=self
 ARG CLAUDE_VERSION=latest
+ARG CODEX_VERSION=latest
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates curl git tmux python3 python3-venv ripgrep nginx \
     && rm -rf /var/lib/apt/lists/*
@@ -12,7 +13,8 @@ RUN git clone https://github.com/BenLocal/ClawTeam.git /opt/clawteam \
     && cd /opt/clawteam && git checkout "$CLAWTEAM_REF" \
     && python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir /opt/clawteam \
-    && npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}"
+    && npm install -g "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
+        "@openai/codex@${CODEX_VERSION}"
 RUN /opt/venv/bin/pip install --no-cache-dir 'PyYAML>=6,<7'
 RUN apt-get update && apt-get install -y --no-install-recommends \
     iptables iproute2 util-linux xz-utils systemd systemd-sysv dbus procps \
