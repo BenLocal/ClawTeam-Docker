@@ -47,10 +47,13 @@ RUN case "${TARGETARCH:-amd64}" in \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     iptables iproute2 util-linux xz-utils systemd systemd-sysv dbus procps \
     && rm -rf /var/lib/apt/lists/*
+# NARB_DISABLE_NATIVE_CACHE: dsh loads native addons from node_modules instead of
+# copying them into /tmp, which the systemd mode mounts as a noexec tmpfs.
 ENV PATH="/opt/venv/bin:${PATH}" HOME=/home/node TERM=xterm-256color \
     CLAWTEAM_DEFAULT_BACKEND=tmux CLAWTEAM_TRANSPORT=file MAGPIE_ADDR=127.0.0.1:3425 \
     CLAWTEAM_PROVIDERS_FILE=/etc/clawteam/providers.yaml \
-    DISABLE_AUTOUPDATER=1 MAGPIE_BUN=/usr/local/bin/bun
+    DISABLE_AUTOUPDATER=1 MAGPIE_BUN=/usr/local/bin/bun \
+    NARB_DISABLE_NATIVE_CACHE=1
 COPY --from=magpie /magpie /usr/local/bin/magpie
 COPY --from=docker /usr/local/bin/docker /usr/local/bin/dockerd \
     /usr/local/bin/docker-init /usr/local/bin/docker-proxy \
