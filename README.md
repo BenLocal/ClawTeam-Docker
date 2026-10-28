@@ -329,6 +329,20 @@ CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本>
 
 容器集成验证：构建后运行 `python3 tests/smoke.py`。测试使用临时项目、容器和数据卷，验证同一端口的两个面板、登录、SSE、模型路由及持久化，并用模拟供应商检查 `429 → 备用模型`，不需要真实模型凭据。另运行 `python3 tests/dind_smoke.py`，使用临时 privileged 容器验证内层构建、运行、代理和 Docker 数据卷持久化。
 
+## 私有 Git 仓库凭据
+
+在 `agent.env` 中填写 `GIT_CREDENTIAL_URL`（如 `https://git.example.com`，只含协议、主机和端口）、`GIT_CREDENTIAL_USERNAME`、`GIT_CREDENTIAL_PASSWORD` 后，每次启动在 Magpie 和 Agent 之前把它们写成 Git `store` 格式的 `~/.config/clawteam-docker/git-credentials`（0600）；三项须同时填写，缺项或地址格式不对时中止启动。Git 身份和凭据助手由部署者的 Git 配置提供，例如把下面的文件只读挂载到 `/etc/gitconfig`：
+
+```ini
+[credential "https://git.example.com"]
+	helper = store --file /home/node/.config/clawteam-docker/git-credentials
+[user]
+	name = your-name
+	email = you@example.com
+```
+
+使用文件而不是 `GIT_CONFIG_*` 环境变量，是因为部分 Agent 运行时（如 dsh）会去掉名称含 `KEY`、`PASSWORD`、`SECRET`、`TOKEN` 的环境变量，导致凭据和 `GIT_CONFIG_KEY_n` 丢失。
+
 ## Vikunja 评论接单
 
 可选的 [Vikunja 桥接](integrations/vikunja/README.md) 按 YAML 中的项目映射，将新评论 `/clawteam run` 对应的任务交给团队 Leader。桥接包含签名校验、持久队列和重复投递去重，独立部署在宿主机。需要用户决定时，可将 [决策沟通规则](integrations/vikunja/decision-policy.md) 加入团队提示词。

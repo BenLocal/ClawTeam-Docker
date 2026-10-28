@@ -28,6 +28,8 @@ if [[ ! ${CLAWTEAM_LEADER_RESTART_DELAY:-10} =~ ^[1-9][0-9]*$ ]]; then
     echo 'CLAWTEAM_LEADER_RESTART_DELAY 必须是正整数秒数。' >&2
     exit 1
 fi
+# Write Git HTTPS credentials before Magpie and agents can fetch private repositories.
+python3 /usr/local/lib/clawteam-docker/git_credentials_bootstrap.py
 # Apply the file on every start, including docker start on an existing container.
 CLAWTEAM_MODEL=$(python3 /usr/local/lib/clawteam-docker/magpie_bootstrap.py \
     "${CLAWTEAM_PROVIDERS_FILE:-/etc/clawteam/providers.yaml}")
