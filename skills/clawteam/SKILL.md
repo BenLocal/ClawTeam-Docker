@@ -18,7 +18,7 @@ description: 通过 ClawTeam OpenAPI 创建和更新任务、发送消息、启�
 
 默认 API 为 `http://172.31.169.115:28088/clawteam/openapi`，默认团队为 `courselab`。可用 `CLAWTEAM_API_URL`、`CLAWTEAM_TEAM` 或全局参数覆盖；地址包含部署前缀及 `/openapi`，末尾写成 `/api` 时脚本自动改用 `/openapi`。
 
-Key 依次取 `--api-key-file`（或 `CLAWTEAM_API_KEY_FILE`）、`CLAWTEAM_BOARD_API_KEY`、`~/.config/clawteam/115-api.key`。Key 与服务端 `agent.env` 的 `CLAWTEAM_BOARD_API_KEY` 相同，由部署者提供；不要写进命令行、文档或任务正文。缺少 Key 时脚本不发送请求；401 表示 Key 错误或服务端未配置 Key，不降级到 `/api` 或 SSH。
+Key 依次取 `--api-key-file`（或 `CLAWTEAM_API_KEY_FILE`）、`CLAWTEAM_BOARD_API_KEY`、`~/.config/clawteam/115-api.key`。Key 与服务端容器环境中的 `CLAWTEAM_BOARD_API_KEY` 相同，由部署者提供；不要写进命令行、文档或任务正文。缺少 Key 时脚本不发送请求；401 表示 Key 错误或服务端未配置 Key，不降级到 `/api` 或 SSH。
 
 ## 命令
 

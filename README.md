@@ -5,11 +5,11 @@ ClawTeam、tmux、Git、Python、Node.js、Claude Code、DeepSeek Harness（dsh 
 ```bash
 ./clawteam.sh build
 # 项目必须是有至少一次提交的普通 Git 仓库（不是宿主机的 linked worktree）。
-CLAWTEAM_ENV_FILE=/绝对路径/agent.env \
+CLAWTEAM_ENV_FILE=/绝对路径/clawteam.env \
   ./clawteam.sh start /绝对路径/你的项目 "创建团队，实现登录功能并验证"
 ```
 
-先编辑 `magpie-config/providers.yaml`，或用 `CLAWTEAM_PROVIDERS_FILE=/path/to/providers.yaml` 指定文件。默认配置通过环境变量 `LLM_API_BASE` 读取你的 OpenAI 兼容网关地址，因此 `agent.env` 至少需要 `LLM_API_BASE=http://your-gateway:8000/v1`。每次启动都会导入该文件并配置 Claude，凭据通过环境变量或挂载文件提供，不需要写入镜像。没有选择 Magpie 模型时，仍可使用 Claude 自身的登录配置。
+先编辑 `magpie-config/providers.yaml`，或用 `CLAWTEAM_PROVIDERS_FILE=/path/to/providers.yaml` 指定文件。默认配置通过环境变量 `LLM_API_BASE` 读取你的 OpenAI 兼容网关地址，因此 env-file 至少需要 `LLM_API_BASE=http://your-gateway:8000/v1`，可用变量见下文“容器环境变量”。每次启动都会导入该文件并配置 Claude，凭据通过环境变量或挂载文件提供，不需要写入镜像。没有选择 Magpie 模型时，仍可使用 Claude 自身的登录配置。
 
 容器启动时自动注册 `clawteam-docker` 团队和 Leader，并启动任务监听器，每 5 秒检查一次变化。在 `/clawteam/` 中选择该团队，通过 New Task 新增任务后，监听器会通知 Leader 读取任务、分配 Worker 并更新状态。配置了 Magpie 模型后，会为挂载的 Git 工作目录完成首次引导和信任设置，并允许 Leader 使用 `clawteam` 命令；其他工具操作仍遵循 Claude 的权限设置，需要人工确认时通过 `./clawteam.sh attach` 操作。镜像已为 Claude 安装官方 ClawTeam skill。已有团队会复用，实际 Worker 在 Leader 分配任务时才创建。
 
@@ -56,7 +56,7 @@ CLAWTEAM_WEB_BIND=0.0.0.0 CLAWTEAM_WEB_PORT=18080 \
 镜像包含 Docker CLI、daemon、Buildx 和 Compose。需要让 Agent 构建镜像或运行容器时启用 DinD：
 
 ```bash
-CLAWTEAM_DIND=1 CLAWTEAM_ENV_FILE=/path/to/agent.env \
+CLAWTEAM_DIND=1 CLAWTEAM_ENV_FILE=/path/to/clawteam.env \
   ./clawteam.sh start /项目目录
 ./clawteam.sh shell
 # 容器内可以执行 docker build、docker run、docker compose。
@@ -86,9 +86,19 @@ volumes:
   clawteam-docker:
 ```
 
-运行时代理放在 Docker env-file 中，可从 [agent.env.example](agent.env.example) 复制。支持 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 及小写形式，也支持 Agent 和内层容器使用的 `ALL_PROXY`。代理地址需要从容器内可达。启动脚本也会传入宿主环境中已设置的这些变量，优先于 env-file。
+运行时代理放在 Docker env-file 中。支持 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 及小写形式，也支持 Agent 和内层容器使用的 `ALL_PROXY`。代理地址需要从容器内可达。启动脚本也会传入宿主环境中已设置的这些变量，优先于 env-file。
 
-同一个 `agent.env` 也可添加部署者自己的环境变量，按 Docker env-file 的 `KEY=value` 格式填写，不需要修改镜像。Compose 使用 `env_file: ./agent.env`，启动脚本使用 `CLAWTEAM_ENV_FILE=/path/to/agent.env`。变量会进入容器环境、Leader、Worker 和 `docker exec` 打开的 shell；DinD 模式的 `clawteam.service` 同样会接收自定义变量，`HOME`、`USER`、`LOGNAME` 保留 node 用户设置。具体变量和值由部署者决定。除代理外，内层 Docker 容器和构建所需的自定义变量仍使用 `docker run --env` 或构建参数显式传入。
+同一个 env-file 也可添加部署者自己的环境变量，按 Docker env-file 的 `KEY=value` 格式填写，不需要修改镜像。启动脚本使用 `CLAWTEAM_ENV_FILE=/path/to/clawteam.env`，Compose 使用 `env_file:`，或把值写在 Compose 同目录的 `.env` 中再经 `environment:` 引用。用 `.env` 时，宿主机 shell 中的同名变量优先于 `.env`，`PATH`、`NO_PROXY` 这类宿主机常有的变量应在 `.env` 中换用其他名称，再在 `environment:` 中映射，例如 `PATH: ${CLAWTEAM_AGENT_PATH}`。成员使用的密钥建议放进 OpenBao（见“OpenBao 密钥服务”），不要写进 env-file。变量会进入容器环境、Leader、Worker 和 `docker exec` 打开的 shell；DinD 模式的 `clawteam.service` 同样会接收自定义变量，`HOME`、`USER`、`LOGNAME` 保留 node 用户设置。具体变量和值由部署者决定。除代理外，内层 Docker 容器和构建所需的自定义变量仍使用 `docker run --env` 或构建参数显式传入。
+
+### 容器环境变量
+
+| 变量 | 用途 |
+| --- | --- |
+| `LLM_API_BASE` | 默认 `providers.yaml` 的 OpenAI 兼容网关地址 |
+| `OPENCODE_GO_API_KEY` | `providers.yaml` 使用 `key_env: OPENCODE_GO_API_KEY` 时的 Key |
+| `CLAWTEAM_BOARD_API_KEY` | 启用 `/clawteam/openapi/` 外部接口的 Bearer Key；为空时拒绝全部外部请求，可用 `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'` 生成 |
+| `CLAWTEAM_OPENBAO`、`CLAWTEAM_OPENBAO_AUTO_UNSEAL` | 设为 `1` 时启用 OpenBao 及自动初始化、解封，见“OpenBao 密钥服务” |
+| `MIRROR_HTTP_PROXY`、`HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` | 代理；留空表示直连，`NO_PROXY` 建议包含 `localhost,127.0.0.1,::1` |
 
 Docker 代理归一化仅写入 dockerd 的 systemd 环境和 `~/.docker/config.json` 的 `proxies.default`，让内层 `docker build` 和 `docker run` 获得代理，并保留 registry 登录。Docker 的 `NO_PROXY` 补上本机地址；Agent 和 Magpie 的原始代理变量保持不变。清空代理变量并重建容器后会移除之前写入的默认代理。
 
@@ -148,7 +158,7 @@ services:
     image: clawteam-local:latest
     init: true
     restart: unless-stopped
-    env_file: agent.env
+    env_file: clawteam.env
     volumes:
       - /你的Git项目:/workspace
       - ./magpie-config:/etc/clawteam:ro
@@ -189,7 +199,7 @@ docker exec --user root clawteam journalctl -u clawteam-skills-update.service --
 
 ## Magpie 配置目录
 
-`magpie-config/` 集中存放 `providers.yaml`、`skills.yaml`、`prompt.yaml`、`mcp.yaml` 和 `plugin.yaml`。使用 Compose 时将这个目录只读挂载到 `/etc/clawteam`；`agent.env` 留在外层。镜像默认包含 Node.js 22 和 npm，MCP 依赖可以在启动时按 YAML 安装。
+`magpie-config/` 集中存放 `providers.yaml`、`skills.yaml`、`prompt.yaml`、`mcp.yaml` 和 `plugin.yaml`。使用 Compose 时将这个目录只读挂载到 `/etc/clawteam`；env-file 或 `.env` 留在外层。镜像默认包含 Node.js 22 和 npm，MCP 依赖可以在启动时按 YAML 安装。
 
 ## 导入 Instructions
 
@@ -331,7 +341,7 @@ CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本>
 
 ## OpenBao 密钥服务（可选）
 
-镜像内置 OpenBao（`OPENBAO_VERSION`，默认 2.7.2）。在 `agent.env` 中设置 `CLAWTEAM_OPENBAO=1` 后，容器启动 OpenBao 服务端（systemd 模式为 `openbao.service`，轻量模式由入口脚本后台启动），只监听容器内 `127.0.0.1:8200`，数据保存在 home 卷的 `~/.openbao/data`。Nginx 在发布端口上代理 Web 界面 `/ui/` 和 API `/v1/`，`/openbao` 跳转到界面；OpenBao 的界面固定使用这两个根路径，不能挂在子路径下。未启用时这两个路径返回 502。
+镜像内置 OpenBao（`OPENBAO_VERSION`，默认 2.7.2）。在容器环境中设置 `CLAWTEAM_OPENBAO=1` 后，容器启动 OpenBao 服务端（systemd 模式为 `openbao.service`，轻量模式由入口脚本后台启动），只监听容器内 `127.0.0.1:8200`，数据保存在 home 卷的 `~/.openbao/data`。Nginx 在发布端口上代理 Web 界面 `/ui/` 和 API `/v1/`，`/openbao` 跳转到界面；OpenBao 的界面固定使用这两个根路径，不能挂在子路径下。未启用时这两个路径返回 502。
 
 首次启用后应立即在界面或命令行完成初始化：未初始化的实例允许任何能访问到它的人执行初始化并取得 root 令牌。解封密钥和 root 令牌离线分开保管；每次容器或服务重启后需要重新解封。外部命令行可设置 `BAO_ADDR=http://<主机>:<端口>` 访问。
 
@@ -410,4 +420,4 @@ CLAWTEAM_IMAGE=ghcr.io/benlocal/clawteam-docker:1.0.0 \
 
 ## 远程 HTTP skill
 
-[skills/clawteam](skills/clawteam/SKILL.md) 是纯 HTTP 客户端，全部操作经 `/clawteam/openapi/` 调用：派发和更新任务、发送消息、启动 Agent、查询快照及监听进度。它不依赖 ah 或 SSH。服务端在 `agent.env` 设置 `CLAWTEAM_BOARD_API_KEY` 后才开放该接口，客户端用同一 Key 作 Bearer 认证。修改 env-file 后需重建容器。
+[skills/clawteam](skills/clawteam/SKILL.md) 是纯 HTTP 客户端，全部操作经 `/clawteam/openapi/` 调用：派发和更新任务、发送消息、启动 Agent、查询快照及监听进度。它不依赖 ah 或 SSH。服务端在容器环境中设置 `CLAWTEAM_BOARD_API_KEY` 后才开放该接口，客户端用同一 Key 作 Bearer 认证。修改 env-file 后需重建容器。
