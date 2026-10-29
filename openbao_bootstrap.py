@@ -1,8 +1,10 @@
 """Import openbao.yaml into OpenBao, then run OpenBao Agent to render secret files.
 
-Initialization and unsealing stay manual. This waits until OpenBao is unsealed
-and the import token file exists, writes the declared KV secrets, grants a
-read-only AppRole to the agent, and execs `bao agent` to render the files.
+By default initialization and unsealing stay manual: this waits until OpenBao is
+unsealed and the import token file exists. With CLAWTEAM_OPENBAO_AUTO_UNSEAL=1 it
+initializes once, keeps the unseal key and root token in ~/.openbao/init.json and
+unseals on every start. It then writes the declared KV secrets, grants a read-only
+AppRole to the agent, and execs `bao agent` to render the files.
 """
 
 import json
@@ -198,16 +200,65 @@ def agent_config(home, files):
     }
 
 
-def configure(config_path, token_file, home=None):
+def auto_unseal_state(client, init_file):
+    """Initialize once and unseal with the stored keys; return 'ready' when unsealed."""
+    try:
+        status = client.call("GET", "sys/seal-status")
+    except (URLError, OSError, RuntimeError):
+        return "未启动"
+    if not status.get("initialized"):
+        if init_file.exists():
+            # The data was reset; keep the old keys instead of overwriting them.
+            init_file.replace(
+                init_file.with_name(f"{init_file.name}.bak-{int(time.time())}")
+            )
+        result = client.call(
+            "PUT", "sys/init", {"secret_shares": 1, "secret_threshold": 1}
+        )
+        write_private(
+            init_file,
+            json.dumps(
+                {
+                    "keys_base64": result["keys_base64"],
+                    "root_token": result["root_token"],
+                }
+            ),
+        )
+        print(
+            f"openbao: 已自动初始化，解封密钥和 root 令牌保存在 {init_file}。",
+            flush=True,
+        )
+        return "刚完成初始化"
+    if status.get("sealed"):
+        if not init_file.exists():
+            return f"已初始化但没有 {init_file}，需要人工解封"
+        keys = json.loads(init_file.read_text(encoding="utf-8"))["keys_base64"]
+        for key in keys[: status.get("t") or len(keys)]:
+            client.call("PUT", "sys/unseal", {"key": key})
+        return "正在解封"
+    return "ready"
+
+
+def configure(config_path, token_file, home=None, auto_unseal=False):
     """Import and prepare the agent; return the agent config path, or None."""
     secrets, files = read_config(config_path)
-    if not secrets and not files:
+    if not auto_unseal and not secrets and not files:
         print("openbao: openbao.yaml 没有声明密钥或文件。", flush=True)
         return None
     client = Client()
+    init_file = (home or Path.home()) / ".openbao/init.json"
+    if auto_unseal:
+        # Initialize even without secrets: an uninitialized server can be claimed by anyone.
+        wait_until(lambda: auto_unseal_state(client, init_file), "自动初始化和解封")
+    if not secrets and not files:
+        print("openbao: openbao.yaml 没有声明密钥或文件。", flush=True)
+        return None
     wait_until(lambda: health(client), " OpenBao 初始化并解封")
-    wait_until(lambda: token_state(token_file), "导入令牌文件 " + str(token_file))
-    client.token = token_file.read_text(encoding="utf-8").strip()
+    if auto_unseal and token_state(token_file) != "ready":
+        client.token = json.loads(init_file.read_text(encoding="utf-8"))["root_token"]
+    else:
+        wait_until(lambda: token_state(token_file), "导入令牌文件 " + str(token_file))
+        client.token = token_file.read_text(encoding="utf-8").strip()
     import_secrets(client, secrets)
     print(f"openbao: 已导入 {len(secrets)} 个密钥路径。", flush=True)
     if not files:
@@ -232,7 +283,11 @@ if __name__ == "__main__":
         os.environ.get("CLAWTEAM_OPENBAO_TOKEN_FILE") or "/etc/clawteam/openbao.token"
     )
     try:
-        config_path = configure(Path(sys.argv[1]), token_path)
+        config_path = configure(
+            Path(sys.argv[1]),
+            token_path,
+            auto_unseal=os.environ.get("CLAWTEAM_OPENBAO_AUTO_UNSEAL") == "1",
+        )
     except (
         OSError,
         ValueError,

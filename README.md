@@ -342,6 +342,8 @@ bao operator unseal    # 每次重启后：按阈值输入解封密钥
 
 备份时使用 `bao operator raft snapshot save`，并另行保管解封密钥；只有数据没有解封密钥无法恢复。
 
+同时设置 `CLAWTEAM_OPENBAO_AUTO_UNSEAL=1` 时改为全自动：首次启动以 1 份密钥初始化，把解封密钥和 root 令牌写入 home 卷的 `~/.openbao/init.json`（0600），之后每次启动用它解封，没有导入令牌文件时用其中的 root 令牌导入。这样无需人工操作，但解封密钥与数据在同一个卷中，取得该卷即可解开全部密钥，封存保护不再有效；应限制卷和宿主机的访问，并把 `init.json` 另行备份。实例已初始化却没有 `init.json` 时不会猜测，仍等待人工解封。
+
 ### 导入密钥并渲染文件
 
 `magpie-config/openbao.yaml` 声明要导入的密钥和要渲染的文件，挂载到 `/etc/clawteam/openbao.yaml`：

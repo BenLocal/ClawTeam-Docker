@@ -172,5 +172,71 @@ class ConfigureTests(unittest.TestCase):
             client.assert_not_called()
 
 
+class SealClient:
+    def __init__(self, initialized, sealed):
+        self.status = {"initialized": initialized, "sealed": sealed, "t": 1}
+        self.calls = []
+
+    def call(self, method, path, payload=None):
+        self.calls.append((method, path, payload))
+        if path == "sys/seal-status":
+            return self.status
+        if path == "sys/init":
+            self.status.update(initialized=True, sealed=True)
+            return {"keys_base64": ["k1"], "root_token": "root-1", "keys": ["hex"]}
+        if path == "sys/unseal":
+            self.status["sealed"] = False
+        return {}
+
+
+class AutoUnsealTests(unittest.TestCase):
+    def test_initializes_once_then_unseals_with_stored_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            init_file = Path(directory, "init.json")
+            client = SealClient(initialized=False, sealed=True)
+            self.assertEqual(
+                bootstrap.auto_unseal_state(client, init_file), "刚完成初始化"
+            )
+            self.assertEqual(stat.S_IMODE(init_file.stat().st_mode), 0o600)
+            stored = json.loads(init_file.read_text())
+            self.assertEqual(stored, {"keys_base64": ["k1"], "root_token": "root-1"})
+            self.assertEqual(bootstrap.auto_unseal_state(client, init_file), "正在解封")
+            self.assertIn(("PUT", "sys/unseal", {"key": "k1"}), client.calls)
+            self.assertEqual(bootstrap.auto_unseal_state(client, init_file), "ready")
+            self.assertEqual(
+                [c for c in client.calls if c[1] == "sys/init"],
+                [("PUT", "sys/init", {"secret_shares": 1, "secret_threshold": 1})],
+            )
+
+    def test_sealed_without_stored_keys_waits_for_a_person(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = SealClient(initialized=True, sealed=True)
+            state = bootstrap.auto_unseal_state(client, Path(directory, "init.json"))
+            self.assertIn("需要人工解封", state)
+            self.assertNotIn("sys/unseal", [path for _, path, _ in client.calls])
+
+    def test_reinitialization_keeps_previous_keys(self):
+        with tempfile.TemporaryDirectory() as directory:
+            init_file = Path(directory, "init.json")
+            init_file.write_text('{"keys_base64": ["old"], "root_token": "old"}')
+            bootstrap.auto_unseal_state(
+                SealClient(initialized=False, sealed=True), init_file
+            )
+            backups = list(Path(directory).glob("init.json.bak-*"))
+            self.assertEqual(len(backups), 1)
+            self.assertIn("old", backups[0].read_text())
+
+    def test_unreachable_server_is_waited_for(self):
+        class Down:
+            def call(self, *args):
+                raise OSError("refused")
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                bootstrap.auto_unseal_state(Down(), Path(directory, "init.json")),
+                "未启动",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
