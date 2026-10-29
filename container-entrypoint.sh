@@ -61,6 +61,12 @@ if [[ ${CLAWTEAM_DIND:-0} != 1 ]]; then
     magpie web --addr 127.0.0.1:3430 --no-open &
     magpie_pid=$!
     pids+=("$magpie_pid")
+    # systemd mode runs openbao.service instead.
+    if [[ ${CLAWTEAM_OPENBAO:-0} == 1 ]]; then
+        mkdir -p -m 700 "$HOME/.openbao/data"
+        bao server -config=/etc/openbao/openbao.hcl &
+        pids+=($!)
+    fi
 fi
 ready=false
 for ((i=0; i<150; i++)); do

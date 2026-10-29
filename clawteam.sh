@@ -23,7 +23,7 @@ Instructions 配置：CLAWTEAM_PROMPT_FILE（宿主机 prompt.yaml 路径）
 MCP 配置：CLAWTEAM_MCP_FILE；插件列表：CLAWTEAM_PLUGIN_FILE（宿主机 YAML 路径）
 容器内 Docker：CLAWTEAM_DIND=1（需要 privileged，使用独立数据卷）
 代理：通过 CLAWTEAM_ENV_FILE 传入 MIRROR_HTTP_PROXY 或 HTTP_PROXY、HTTPS_PROXY、NO_PROXY
-构建版本：CLAWTEAM_REF、CLAUDE_VERSION、MAGPIE_VERSION、DSH_VERSION、DSH_TUI_VERSION、PLAYWRIGHT_VERSION
+构建版本：CLAWTEAM_REF、CLAUDE_VERSION、MAGPIE_VERSION、DSH_VERSION、DSH_TUI_VERSION、PLAYWRIGHT_VERSION、OPENBAO_VERSION
 HELP
 }
 command -v docker >/dev/null || { echo '请先安装 Docker。' >&2; exit 1; }
@@ -36,6 +36,7 @@ case "$action" in
             --build-arg "CODEX_VERSION=${CODEX_VERSION:-latest}" \
             --build-arg "BUN_VERSION=${BUN_VERSION:-1.4.2}" \
             --build-arg "PLAYWRIGHT_VERSION=${PLAYWRIGHT_VERSION:-1.64.1}" \
+            --build-arg "OPENBAO_VERSION=${OPENBAO_VERSION:-2.7.2}" \
             --build-arg "DSH_VERSION=${DSH_VERSION:-0.2.1-rc.2}" \
             --build-arg "DSH_TUI_VERSION=${DSH_TUI_VERSION:-0.17.0}" \
             --build-arg "MAGPIE_VERSION=${MAGPIE_VERSION:-latest}" -t "$IMAGE" "$ROOT"

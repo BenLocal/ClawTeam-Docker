@@ -314,7 +314,7 @@ CLAWTEAM_MODEL=group/coding ./clawteam.sh start /项目目录 "继续任务"
 
 ```bash
 CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本> BUN_VERSION=<版本> \
-  DSH_VERSION=<npm版本> DSH_TUI_VERSION=<npm版本> PLAYWRIGHT_VERSION=<pip版本> MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
+  DSH_VERSION=<npm版本> DSH_TUI_VERSION=<npm版本> PLAYWRIGHT_VERSION=<pip版本> OPENBAO_VERSION=<版本> MAGPIE_VERSION=<镜像tag> ./clawteam.sh build
 ```
 
 镜像设置 `DISABLE_AUTOUPDATER=1`，关闭 Claude Code 在容器内的自动更新；工具版本随镜像构建固定，升级时重新构建镜像。
@@ -342,6 +342,19 @@ CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本>
 ```
 
 使用文件而不是 `GIT_CONFIG_*` 环境变量，是因为部分 Agent 运行时（如 dsh）会去掉名称含 `KEY`、`PASSWORD`、`SECRET`、`TOKEN` 的环境变量，导致凭据和 `GIT_CONFIG_KEY_n` 丢失。
+
+## OpenBao 密钥服务（可选）
+
+镜像内置 OpenBao（`OPENBAO_VERSION`，默认 2.7.2）。在 `agent.env` 中设置 `CLAWTEAM_OPENBAO=1` 后，容器启动 OpenBao 服务端（systemd 模式为 `openbao.service`，轻量模式由入口脚本后台启动），只监听容器内 `127.0.0.1:8200`，数据保存在 home 卷的 `~/.openbao/data`。Nginx 在发布端口上代理 Web 界面 `/ui/` 和 API `/v1/`，`/openbao` 跳转到界面；OpenBao 的界面固定使用这两个根路径，不能挂在子路径下。未启用时这两个路径返回 502。
+
+首次启用后应立即在界面或命令行完成初始化：未初始化的实例允许任何能访问到它的人执行初始化并取得 root 令牌。解封密钥和 root 令牌离线分开保管；每次容器或服务重启后需要重新解封。外部命令行可设置 `BAO_ADDR=http://<主机>:<端口>` 访问。
+
+```bash
+bao operator init      # 首次：保存输出的解封密钥和 root 令牌
+bao operator unseal    # 每次重启后：按阈值输入解封密钥
+```
+
+备份时使用 `bao operator raft snapshot save`，并另行保管解封密钥；只有数据没有解封密钥无法恢复。
 
 ## Vikunja 评论接单
 

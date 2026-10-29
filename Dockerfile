@@ -1,6 +1,8 @@
 ARG MAGPIE_VERSION=latest
 ARG DOCKER_VERSION=29.9.2
+ARG OPENBAO_VERSION=2.7.2
 FROM ghcr.io/yetone/magpie:${MAGPIE_VERSION} AS magpie
+FROM quay.io/openbao/openbao:${OPENBAO_VERSION} AS openbao
 FROM docker:${DOCKER_VERSION}-dind AS docker
 FROM node:22-bookworm-slim
 ARG CLAWTEAM_REF=self
@@ -63,12 +65,14 @@ ENV PATH="/opt/venv/bin:${PATH}" HOME=/home/node TERM=xterm-256color \
     DISABLE_AUTOUPDATER=1 MAGPIE_BUN=/usr/local/bin/bun \
     NARB_DISABLE_NATIVE_CACHE=1
 COPY --from=magpie /magpie /usr/local/bin/magpie
+COPY --from=openbao /usr/bin/bao /usr/local/bin/bao
 COPY --from=docker /usr/local/bin/docker /usr/local/bin/dockerd \
     /usr/local/bin/docker-init /usr/local/bin/docker-proxy \
     /usr/local/bin/containerd-shim-runc-v2 \
     /usr/local/bin/ctr /usr/local/bin/runc /usr/local/bin/
 COPY --from=docker /usr/local/libexec/docker/cli-plugins/ /usr/local/libexec/docker/cli-plugins/
 COPY nginx.conf /etc/nginx/clawteam.conf
+COPY openbao.hcl /etc/openbao/openbao.hcl
 COPY subpath.js /etc/nginx/subpath.js
 COPY leader_runtime.py /usr/local/lib/clawteam-docker/leader_runtime.py
 COPY magpie_bootstrap.py /usr/local/lib/clawteam-docker/magpie_bootstrap.py
@@ -78,7 +82,7 @@ COPY mcp_bootstrap.py plugin_bootstrap.py git_credentials_bootstrap.py /usr/loca
 COPY proxy_bootstrap.py /usr/local/lib/clawteam-docker/proxy_bootstrap.py
 COPY systemd_runtime.py /usr/local/lib/clawteam-docker/systemd_runtime.py
 COPY systemd/ /etc/systemd/system/
-RUN systemctl enable docker.service magpie.service clawteam.service clawteam-skills-update.timer \
+RUN systemctl enable docker.service magpie.service openbao.service clawteam.service clawteam-skills-update.timer \
     && systemctl mask getty.target console-getty.service systemd-udevd.service \
        systemd-udevd-control.socket systemd-udevd-kernel.socket systemd-logind.service \
     && truncate -s 0 /etc/machine-id \

@@ -18,4 +18,5 @@
 !systemd/*.service
 !systemd/*.timer
 !nginx.conf
+!openbao.hcl
 !subpath.js
