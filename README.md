@@ -343,7 +343,7 @@ CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本>
 
 镜像内置 OpenBao（`OPENBAO_VERSION`，默认 2.7.2）。在容器环境中设置 `CLAWTEAM_OPENBAO=1` 后，容器启动 OpenBao 服务端（systemd 模式为 `openbao.service`，轻量模式由入口脚本后台启动），只监听容器内 `127.0.0.1:8200`，数据保存在 home 卷的 `~/.openbao/data`。Nginx 在发布端口上代理 Web 界面 `/ui/` 和 API `/v1/`，`/openbao` 跳转到界面；OpenBao 的界面固定使用这两个根路径，不能挂在子路径下。未启用时这两个路径返回 502。
 
-首次启用后应立即在界面或命令行完成初始化：未初始化的实例允许任何能访问到它的人执行初始化并取得 root 令牌。解封密钥和 root 令牌离线分开保管；每次容器或服务重启后需要重新解封。外部命令行可设置 `BAO_ADDR=http://<主机>:<端口>` 访问。
+界面登录、查看与修改密钥见 [OpenBao 界面使用指南](docs/openbao.md)。首次启用后应立即在界面或命令行完成初始化：未初始化的实例允许任何能访问到它的人执行初始化并取得 root 令牌。解封密钥和 root 令牌离线分开保管；每次容器或服务重启后需要重新解封。外部命令行可设置 `BAO_ADDR=http://<主机>:<端口>` 访问。
 
 ```bash
 bao operator init      # 首次：保存输出的解封密钥和 root 令牌
