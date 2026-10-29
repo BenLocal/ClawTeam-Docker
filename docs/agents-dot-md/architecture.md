@@ -7,7 +7,7 @@
 
 systemd 模式下，`docker.service` 管理内层 daemon，`magpie.service` 管理网关与 Web，`clawteam.service` 等待依赖就绪后运行 `container-entrypoint.sh`。设置 `CLAWTEAM_OPENBAO=1` 时，`openbao.service` 运行 OpenBao 密钥服务，未设置时由 `ExecCondition` 跳过。轻量模式由入口脚本监管 Magpie、Board 和 Nginx。
 
-配置导入在 Leader 前完成：Git 凭据文件（Magpie 启动前）、原生插件、技能、MCP 依赖及服务定义、Instructions。`skills_bootstrap.Library` 提供本机鉴权 HTTP 客户端；配置写入使用 Magpie 原生 API 或 CLI。成功安装记录属于 home 卷的运行状态。
+配置导入在 Leader 前完成：原生插件、技能、MCP 依赖及服务定义、Instructions。OpenBao 密钥由 `openbao-agent.service` 在人工解封后导入并渲染为文件，不阻塞 Leader 启动。`skills_bootstrap.Library` 提供本机鉴权 HTTP 客户端；配置写入使用 Magpie 原生 API 或 CLI。成功安装记录属于 home 卷的运行状态。
 
 Nginx 在同一发布端口提供 `/clawteam/` 与 `/magpie/`；Board、Magpie Web 和模型网关使用各自的容器内端口。Leader 与 Worker 通过 ClawTeam 的团队存储、tmux 和 Git worktree 协作。
 

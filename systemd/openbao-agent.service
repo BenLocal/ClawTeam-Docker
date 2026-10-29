@@ -1,0 +1,20 @@
+[Unit]
+Description=Import openbao.yaml and render secret files with OpenBao Agent
+Wants=openbao.service
+After=openbao.service
+
+[Service]
+Type=exec
+User=node
+Group=node
+EnvironmentFile=/run/clawteam/agent.env
+ExecCondition=/bin/sh -c 'test "$${CLAWTEAM_OPENBAO:-0}" = 1'
+ExecStart=/opt/venv/bin/python3 /usr/local/lib/clawteam-docker/openbao_bootstrap.py /etc/clawteam/openbao.yaml
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

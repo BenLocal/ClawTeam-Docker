@@ -78,11 +78,11 @@ COPY leader_runtime.py /usr/local/lib/clawteam-docker/leader_runtime.py
 COPY magpie_bootstrap.py /usr/local/lib/clawteam-docker/magpie_bootstrap.py
 COPY skills_bootstrap.py /usr/local/lib/clawteam-docker/skills_bootstrap.py
 COPY prompt_bootstrap.py /usr/local/lib/clawteam-docker/prompt_bootstrap.py
-COPY mcp_bootstrap.py plugin_bootstrap.py git_credentials_bootstrap.py /usr/local/lib/clawteam-docker/
+COPY mcp_bootstrap.py plugin_bootstrap.py openbao_bootstrap.py /usr/local/lib/clawteam-docker/
 COPY proxy_bootstrap.py /usr/local/lib/clawteam-docker/proxy_bootstrap.py
 COPY systemd_runtime.py /usr/local/lib/clawteam-docker/systemd_runtime.py
 COPY systemd/ /etc/systemd/system/
-RUN systemctl enable docker.service magpie.service openbao.service clawteam.service clawteam-skills-update.timer \
+RUN systemctl enable docker.service magpie.service openbao.service openbao-agent.service clawteam.service clawteam-skills-update.timer \
     && systemctl mask getty.target console-getty.service systemd-udevd.service \
        systemd-udevd-control.socket systemd-udevd-kernel.socket systemd-logind.service \
     && truncate -s 0 /etc/machine-id \

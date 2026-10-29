@@ -1,0 +1,13 @@
+# OpenBao secrets imported when CLAWTEAM_OPENBAO=1, after manual init and unseal.
+# The import token is read from /etc/clawteam/openbao.token (CLAWTEAM_OPENBAO_TOKEN_FILE).
+# secrets:
+#   clawteam/env:
+#     SERVICE_TOKEN: "<value>"
+# Files rendered by OpenBao Agent (mode 0600) from the secrets above:
+# files:
+#   - path: /home/node/.config/clawteam/secrets.env
+#     template: |
+#       {{ with secret "secret/data/clawteam/env" }}{{ range $k, $v := .Data.data }}export {{ $k }}={{ $v }}
+#       {{ end }}{{ end }}
+secrets: {}
+files: []

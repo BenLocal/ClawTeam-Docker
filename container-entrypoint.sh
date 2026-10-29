@@ -28,8 +28,6 @@ if [[ ! ${CLAWTEAM_LEADER_RESTART_DELAY:-10} =~ ^[1-9][0-9]*$ ]]; then
     echo 'CLAWTEAM_LEADER_RESTART_DELAY 必须是正整数秒数。' >&2
     exit 1
 fi
-# Write Git HTTPS credentials before Magpie and agents can fetch private repositories.
-python3 /usr/local/lib/clawteam-docker/git_credentials_bootstrap.py
 # Apply the file on every start, including docker start on an existing container.
 CLAWTEAM_MODEL=$(python3 /usr/local/lib/clawteam-docker/magpie_bootstrap.py \
     "${CLAWTEAM_PROVIDERS_FILE:-/etc/clawteam/providers.yaml}")
@@ -61,11 +59,14 @@ if [[ ${CLAWTEAM_DIND:-0} != 1 ]]; then
     magpie web --addr 127.0.0.1:3430 --no-open &
     magpie_pid=$!
     pids+=("$magpie_pid")
-    # systemd mode runs openbao.service instead.
+    # systemd mode runs openbao.service and openbao-agent.service instead.
     if [[ ${CLAWTEAM_OPENBAO:-0} == 1 ]]; then
         mkdir -p -m 700 "$HOME/.openbao/data"
         bao server -config=/etc/openbao/openbao.hcl &
         pids+=($!)
+        # Waits for manual unseal, so it stays out of the services that stop the container.
+        python3 /usr/local/lib/clawteam-docker/openbao_bootstrap.py \
+            "${CLAWTEAM_OPENBAO_FILE:-/etc/clawteam/openbao.yaml}" &
     fi
 fi
 ready=false

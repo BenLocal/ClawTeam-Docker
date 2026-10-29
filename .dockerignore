@@ -7,7 +7,7 @@
 !prompt_bootstrap.py
 !mcp_bootstrap.py
 !plugin_bootstrap.py
-!git_credentials_bootstrap.py
+!openbao_bootstrap.py
 !magpie-config/
 !magpie-config/*.yaml
 !leader-session.sh

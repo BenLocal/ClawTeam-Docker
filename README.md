@@ -329,20 +329,6 @@ CLAWTEAM_REF=<tag或commit> CLAUDE_VERSION=<npm版本> CODEX_VERSION=<npm版本>
 
 容器集成验证：构建后运行 `python3 tests/smoke.py`。测试使用临时项目、容器和数据卷，验证同一端口的两个面板、登录、SSE、模型路由及持久化，并用模拟供应商检查 `429 → 备用模型`，不需要真实模型凭据。另运行 `python3 tests/dind_smoke.py`，使用临时 privileged 容器验证内层构建、运行、代理和 Docker 数据卷持久化。
 
-## 私有 Git 仓库凭据
-
-在 `agent.env` 中填写 `GIT_CREDENTIAL_URL`（如 `https://git.example.com`，只含协议、主机和端口）、`GIT_CREDENTIAL_USERNAME`、`GIT_CREDENTIAL_PASSWORD` 后，每次启动在 Magpie 和 Agent 之前把它们写成 Git `store` 格式的 `~/.config/clawteam-docker/git-credentials`（0600）；三项须同时填写，缺项或地址格式不对时中止启动。Git 身份和凭据助手由部署者的 Git 配置提供，例如把下面的文件只读挂载到 `/etc/gitconfig`：
-
-```ini
-[credential "https://git.example.com"]
-	helper = store --file /home/node/.config/clawteam-docker/git-credentials
-[user]
-	name = your-name
-	email = you@example.com
-```
-
-使用文件而不是 `GIT_CONFIG_*` 环境变量，是因为部分 Agent 运行时（如 dsh）会去掉名称含 `KEY`、`PASSWORD`、`SECRET`、`TOKEN` 的环境变量，导致凭据和 `GIT_CONFIG_KEY_n` 丢失。
-
 ## OpenBao 密钥服务（可选）
 
 镜像内置 OpenBao（`OPENBAO_VERSION`，默认 2.7.2）。在 `agent.env` 中设置 `CLAWTEAM_OPENBAO=1` 后，容器启动 OpenBao 服务端（systemd 模式为 `openbao.service`，轻量模式由入口脚本后台启动），只监听容器内 `127.0.0.1:8200`，数据保存在 home 卷的 `~/.openbao/data`。Nginx 在发布端口上代理 Web 界面 `/ui/` 和 API `/v1/`，`/openbao` 跳转到界面；OpenBao 的界面固定使用这两个根路径，不能挂在子路径下。未启用时这两个路径返回 502。
@@ -355,6 +341,36 @@ bao operator unseal    # 每次重启后：按阈值输入解封密钥
 ```
 
 备份时使用 `bao operator raft snapshot save`，并另行保管解封密钥；只有数据没有解封密钥无法恢复。
+
+### 导入密钥并渲染文件
+
+`magpie-config/openbao.yaml` 声明要导入的密钥和要渲染的文件，挂载到 `/etc/clawteam/openbao.yaml`：
+
+```yaml
+secrets:
+  clawteam/env:
+    SERVICE_TOKEN: "<value>"
+  clawteam/git:
+    username: "<user>"
+    password: "<password>"
+files:
+  - path: /home/node/.config/clawteam/secrets.env
+    template: |
+      {{ with secret "secret/data/clawteam/env" }}{{ range $k, $v := .Data.data }}export {{ $k }}={{ $v }}
+      {{ end }}{{ end }}
+  - path: /home/node/.config/clawteam/git-credentials
+    template: |
+      {{ with secret "secret/data/clawteam/git" }}https://{{ .Data.data.username | urlquery }}:{{ .Data.data.password | urlquery }}@git.example.com
+      {{ end }}
+```
+
+`openbao-agent.service`（轻量模式由入口脚本在后台运行）先校验整个文件，然后等待 OpenBao 初始化、解封，以及导入令牌文件 `/etc/clawteam/openbao.token`（可用 `CLAWTEAM_OPENBAO_TOKEN_FILE` 指定）出现；令牌需要能写 KV、策略和 AppRole，例如初始化时的 root 令牌。导入时把 `secrets` 写入 KV v2 挂载 `secret`（内容不变时不写新版本，未列出的路径保留），为每个路径授予 `clawteam-agent` 只读策略和同名 AppRole，再由 OpenBao Agent 用 Go 模板把 `files` 渲染为 0600 文件并在密钥变化时刷新。等待期间 Leader 和成员正常启动，已渲染过的文件继续可用。
+
+成员从渲染出的文件使用密钥，不必经过环境变量，因此对会去掉 `KEY`、`PASSWORD`、`SECRET`、`TOKEN` 类环境变量的运行时同样有效：Git 在 `/etc/gitconfig` 或 `~/.gitconfig` 中用 `helper = store --file <渲染出的凭据文件>` 引用凭据，只认环境变量的命令在同一条命令里加载 `secrets.env`：
+
+```bash
+set -a; . ~/.config/clawteam/secrets.env; set +a; <命令>
+```
 
 ## Vikunja 评论接单
 
